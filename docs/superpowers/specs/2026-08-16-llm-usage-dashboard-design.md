@@ -361,8 +361,31 @@ scans stalled unrelated commands for minutes).
 
 ## 5. Pricing
 
-Rates are USD per million tokens, from the `claude-api` skill's table
-(cached 2026-06-24):
+Rates are USD per million tokens. **Every rate is stored as an absolute value,
+not a multiplier.** Anthropic expresses cache pricing as multipliers of input
+(×0.10 read, ×1.25 write at 5m TTL, ×2.00 at 1h) while OpenAI publishes absolute
+per-model rates — and OpenAI has cases multipliers cannot express: models with
+no cache-write charge at all (`gpt-5.5`, `gpt-5.4`), and a long-context tier that
+roughly doubles every rate. Storing absolutes covers both vendors with one
+schema; the Anthropic defaults are simply the multipliers pre-applied.
+
+```toml
+[models."claude-opus-5"]
+input = 5.00 ; cached_input = 0.50 ; cache_write_5m = 6.25
+cache_write_1h = 10.00 ; output = 25.00
+
+[models."gpt-5.6-sol"]
+input = 5.00 ; cached_input = 0.50 ; cache_write = 6.25 ; output = 30.00
+  [models."gpt-5.6-sol".long_context]
+  input = 10.00 ; cached_input = 1.00 ; cache_write = 12.50 ; output = 45.00
+```
+
+An omitted rate means **no charge for that component**, which is how `"—"` in a
+vendor table is represented. `long_context` is optional; when absent the base
+rates always apply.
+
+**Anthropic** (from the `claude-api` skill, cached 2026-06-24) — base input, with
+cache rates derived at ×0.10 / ×1.25 / ×2.00:
 
 | Model | Input | Output |
 |---|---|---|
@@ -371,8 +394,49 @@ Rates are USD per million tokens, from the `claude-api` skill's table
 | `claude-sonnet-5`, `claude-sonnet-4-6` | 3.00 | 15.00 |
 | `claude-haiku-4-5` | 1.00 | 5.00 |
 
-Multipliers on the input rate: **cache read ×0.10**, **cache write ×1.25 (5m
-TTL)**, **cache write ×2.00 (1h TTL)**.
+**OpenAI** (user-supplied 2026-08-16), short-context tier; long-context in
+parentheses where published:
+
+| Model | Input | Cached | Cache write | Output |
+|---|---|---|---|---|
+| `gpt-5.6-sol` | 5.00 (10.00) | 0.50 (1.00) | 6.25 (12.50) | 30.00 (45.00) |
+| `gpt-5.6-terra` | 2.00 (4.00) | 0.20 (0.40) | 2.50 (5.00) | 12.00 (18.00) |
+| `gpt-5.6-luna` | 0.20 (0.40) | 0.02 (0.04) | 0.25 (0.50) | 1.20 (1.80) |
+| `gpt-5.5` | 5.00 (10.00) | 0.50 (1.00) | — | 30.00 (45.00) |
+| `gpt-5.4` | 2.50 (5.00) | 0.25 (0.50) | — | 15.00 (22.50) |
+| `gpt-5.2` | 1.75 | 0.175 | — | 14.00 |
+| `gpt-5.1` | 1.25 | 0.125 | — | 10.00 |
+| `gpt-5` | 1.25 | 0.125 | — | 10.00 |
+| `gpt-5-mini` | 0.25 | 0.025 | — | 2.00 |
+| `gpt-5-nano` | 0.05 | 0.005 | — | 0.40 |
+
+### 5.1 The Codex coverage gap
+
+Measured on this machine, **78% of Codex requests use models absent from the
+published table** — the `-codex` variants:
+
+| Unpriced model | Requests |
+|---|---:|
+| `gpt-5-codex` | 3,559 |
+| `gpt-5.3-codex` | 2,936 |
+| `gpt-5.1-codex-max` | 751 |
+| `gpt-5.1-codex` | 472 |
+| `gpt-5.2-codex` | 385 |
+| `codex-auto-review` | 102 |
+| `gpt-5.1-codex-mini` | 12 |
+
+These ship in `pricing.toml` **pre-populated with the model IDs and all rates
+commented out**, so the user fills in numbers rather than discovering IDs. They
+are deliberately not aliased to their non-`-codex` counterparts: `gpt-5-codex →
+gpt-5` is plausible but unverified, and guessing there would misprice the
+majority of Codex usage while looking authoritative. Until rates are supplied
+they count toward the `unpriced` badge (§8) and are excluded from cost totals —
+tokens still display.
+
+The long-context tier is likewise **not auto-detected** in Phase 1. Codex records
+`model_context_window` (observed: 258,400), but the threshold at which long-context
+pricing applies is not published in the table above, so every row prices at the
+base tier and the assumption is stated in §13.
 
 - **Model IDs must be normalized before lookup.** Claude Code emits both
   `claude-haiku-4-5` and `claude-haiku-4-5-20251001`; a naive table drops the
@@ -555,15 +619,22 @@ llm-usage version
 
 Verified to resolve on 2026-08-16 against `proxy.golang.org`:
 
-| Module | Version |
-|---|---|
-| `github.com/charmbracelet/bubbletea` | v1.3.10 |
-| `github.com/charmbracelet/lipgloss` | v1.1.0 |
-| `github.com/charmbracelet/bubbles` | v1.0.0 |
-| `github.com/NimbleMarkets/ntcharts` | v0.5.1 |
-| `modernc.org/sqlite` | v1.56.0 |
+| Module | Version | Phase |
+|---|---|---|
+| `github.com/charmbracelet/bubbletea` | v1.3.10 | 1 |
+| `github.com/charmbracelet/lipgloss` | v1.1.0 | 1 |
+| `modernc.org/sqlite` | v1.56.0 | 1 |
+| `github.com/charmbracelet/bubbles` | v1.0.0 | 2 |
+| `github.com/NimbleMarkets/ntcharts` | v0.5.1 | 2 |
+| `github.com/fsnotify/fsnotify` | v1.10.1 | 2 |
 
-`github.com/fsnotify/fsnotify` (v1.10.1) is Phase 2.
+**Phase 1 hand-rolls its renderers** (`internal/render`) rather than taking
+`ntcharts`. The three primitives it needs — a horizontal bar with partial-block
+precision, a sparkline, and a braille line chart — are each under 30 lines,
+were verified working in this terminal during design, and are pure functions of
+`[]float64` → `string`, so they unit-test without a terminal. `ntcharts` arrives
+in Phase 2 with the Radar view's richer charts, where its axis handling and
+streaming updates start earning their keep.
 
 ---
 
@@ -592,7 +663,15 @@ every later step is additive.
   from `settings.json`, so the built-in default applies; observed history spans
   22 days with usage gaps that blur the cutoff. The design does not depend on the
   exact number — only on history being bounded, which is established.
-- **Codex pricing is user-supplied.** No OpenAI rates ship with the tool.
+- **OpenAI rates are sourced from <https://developers.openai.com/api/docs/pricing>**
+  (retrieved 2026-08-16). They ship as defaults but carry a `source` and
+  `retrieved` field in `pricing.toml`, because published rates change and
+  introductory pricing expires. The `-codex` variants are absent from that page
+  and are shipped commented out (§5.1).
+- **Long-context pricing is not applied.** The tier exists in OpenAI's table but
+  its token threshold is not published there, so all rows price at the base
+  tier. If a row's context exceeded the threshold, its true cost is up to ~2×
+  the figure shown.
 - **The 4 anomalous Codex sessions** are interpreted as context resets. Rows are
   flagged rather than corrected; if the interpretation proves wrong, only those
   rows change.
