@@ -1,4 +1,4 @@
-# llm-usage-dashboard Phase 1 Implementation Plan
+# ccdash Phase 1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Go module path:** `github.com/seanochang/llm-usage-dashboard`. Go 1.26.
+- **Go module path:** `github.com/seanochang/ccdash`. Go 1.26.
 - **No CGO.** `modernc.org/sqlite` only. The binary must build with `CGO_ENABLED=0`.
 - **Source directories are read-only.** Never write to, move, or delete anything under `~/.claude` or `~/.codex`. The single exception is `setup-statusline` (Task 8), which is confirmed and backed up.
 - **Never drop a row you cannot price.** Unpriceable rows are stored, counted in `unpriced`, and surfaced in the UI. Silent exclusion is a spec violation.
@@ -42,8 +42,8 @@
 | `internal/agg/agg.go` | Totals, ByDay, ByModel, ByProject, LatestLimits |
 | `internal/render/render.go` | `Bar`, `Sparkline`, `Braille` — pure string functions |
 | `internal/tui/tui.go` | Bubble Tea model + Overview view |
-| `cmd/llm-usage/main.go` | Subcommand dispatch |
-| `cmd/llm-usage/statusline.go` | `setup-statusline` |
+| `cmd/ccdash/main.go` | Subcommand dispatch |
+| `cmd/ccdash/statusline.go` | `setup-statusline` |
 
 ---
 
@@ -60,8 +60,8 @@
 - [x] **Step 1: Initialize the module**
 
 ```bash
-cd llm-usage-dashboard
-go mod init github.com/seanochang/llm-usage-dashboard
+cd ccdash
+go mod init github.com/seanochang/ccdash
 ```
 
 - [x] **Step 2: Write the failing test**
@@ -466,7 +466,7 @@ func parseTOML(s string) (*Pricing, error) {
 
 func defaultTOML() string {
 	var b strings.Builder
-	b.WriteString("# llm-usage-dashboard pricing, USD per million tokens.\n")
+	b.WriteString("# ccdash pricing, USD per million tokens.\n")
 	b.WriteString("# Anthropic: claude-api skill table, cached 2026-06-24.\n")
 	b.WriteString("# OpenAI:    https://developers.openai.com/api/docs/pricing, retrieved 2026-08-16.\n")
 	b.WriteString("# An omitted key means no charge for that component.\n\n")
@@ -536,7 +536,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/model"
 )
 
 func openTmp(t *testing.T) *Store {
@@ -727,7 +727,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/model"
 	_ "modernc.org/sqlite"
 )
 
@@ -925,7 +925,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func parseFixture(t *testing.T, name string) source.Result {
@@ -1008,7 +1008,7 @@ Create `internal/source/source.go`:
 ```go
 package source
 
-import "github.com/seanochang/llm-usage-dashboard/internal/model"
+import "github.com/seanochang/ccdash/internal/model"
 
 type FileRef struct {
 	Path  string
@@ -1048,8 +1048,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 // usageMarker is the byte prefilter. Two-thirds of transcript lines fail it,
@@ -1239,8 +1239,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func parseFixture(t *testing.T) source.Result {
@@ -1353,8 +1353,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 var tokenMarker = []byte(`"token_count"`)
@@ -1613,8 +1613,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func ref(t *testing.T, name string) source.FileRef {
@@ -1716,8 +1716,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func parseTime(s string) *time.Time {
@@ -1890,7 +1890,7 @@ git commit -m "feat(source/limits): cached claude.json and live statusline limit
 ## Task 7: Ingest orchestration and the `ingest` / `limits` commands
 
 **Files:**
-- Create: `internal/ingest/ingest.go`, `cmd/llm-usage/main.go`
+- Create: `internal/ingest/ingest.go`, `cmd/ccdash/main.go`
 - Test: `internal/ingest/ingest_test.go`
 
 **Interfaces:**
@@ -1909,9 +1909,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/claude"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source/claude"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 const fixture = `{"type":"assistant","timestamp":"2026-08-15T00:00:00.000Z","sessionId":"s","cwd":"/p","requestId":"r1","message":{"model":"claude-opus-5","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":0}}}
@@ -1993,7 +1993,7 @@ type sourceIface = interface {
 
 - [x] **Step 2: Simplify the test to the real signature**
 
-Replace the alias block and both `toSources(...)` calls so the file uses `[]source.Source{claude.New(dir)}` directly, and add `"github.com/seanochang/llm-usage-dashboard/internal/source"` to the imports.
+Replace the alias block and both `toSources(...)` calls so the file uses `[]source.Source{claude.New(dir)}` directly, and add `"github.com/seanochang/ccdash/internal/source"` to the imports.
 
 - [x] **Step 3: Run test to verify it fails**
 
@@ -2011,12 +2011,12 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/claude"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/codex"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/limits"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
+	"github.com/seanochang/ccdash/internal/source/claude"
+	"github.com/seanochang/ccdash/internal/source/codex"
+	"github.com/seanochang/ccdash/internal/source/limits"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 type Stats struct {
@@ -2032,7 +2032,7 @@ func DefaultSources(home string) []source.Source {
 		claude.New(home + "/.claude/projects"),
 		codex.New(home + "/.codex/sessions"),
 		limits.NewClaudeJSON(home + "/.claude.json"),
-		limits.NewStatusline(home + "/.local/share/llm-usage-dashboard/statusline.jsonl"),
+		limits.NewStatusline(home + "/.local/share/ccdash/statusline.jsonl"),
 	}
 }
 
@@ -2139,7 +2139,7 @@ Expected: PASS — two tests
 
 - [x] **Step 7: Write the CLI**
 
-Create `cmd/llm-usage/main.go`:
+Create `cmd/ccdash/main.go`:
 
 ```go
 package main
@@ -2149,28 +2149,28 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/ingest"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/ingest"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 const version = "0.1.0"
 
 func dataDir() string {
 	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-		return filepath.Join(d, "llm-usage-dashboard")
+		return filepath.Join(d, "ccdash")
 	}
 	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".local", "share", "llm-usage-dashboard")
+	return filepath.Join(h, ".local", "share", "ccdash")
 }
 
 func configDir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "llm-usage-dashboard")
+		return filepath.Join(d, "ccdash")
 	}
 	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".config", "llm-usage-dashboard")
+	return filepath.Join(h, ".config", "ccdash")
 }
 
 func main() {
@@ -2267,7 +2267,7 @@ func printLimits() error {
 		return err
 	}
 	if len(states) == 0 {
-		fmt.Println("no limit data — run `llm-usage setup-statusline` for live Claude limits")
+		fmt.Println("no limit data — run `ccdash setup-statusline` for live Claude limits")
 		return nil
 	}
 	for _, s := range states {
@@ -2302,8 +2302,8 @@ with `"time"` added to imports.
 - [x] **Step 8: Build and run against the real corpus**
 
 ```bash
-go build -o llm-usage ./cmd/llm-usage
-./llm-usage ingest
+go build -o ccdash ./cmd/ccdash
+./ccdash ingest
 ```
 Expected: a summary line with a request count in the tens of thousands and a
 dollar figure. Compare against the reference oracle:
@@ -2315,7 +2315,7 @@ The Claude request count and cost must agree.
 - [x] **Step 9: Commit**
 
 ```bash
-git add internal/ingest cmd/llm-usage
+git add internal/ingest cmd/ccdash
 git commit -m "feat(ingest): orchestration with bounded fan-out and the ingest/limits commands"
 ```
 
@@ -2324,8 +2324,8 @@ git commit -m "feat(ingest): orchestration with bounded fan-out and the ingest/l
 ## Task 8: `setup-statusline`
 
 **Files:**
-- Create: `cmd/llm-usage/statusline.go`
-- Test: `cmd/llm-usage/statusline_test.go`
+- Create: `cmd/ccdash/statusline.go`
+- Test: `cmd/ccdash/statusline_test.go`
 
 **Interfaces:**
 - Consumes: `dataDir()` (Task 7)
@@ -2333,7 +2333,7 @@ git commit -m "feat(ingest): orchestration with bounded fan-out and the ingest/l
 
 - [x] **Step 1: Write the failing test**
 
-Create `cmd/llm-usage/statusline_test.go`:
+Create `cmd/ccdash/statusline_test.go`:
 
 ```go
 package main
@@ -2374,12 +2374,12 @@ func contains(hay, needle string) bool {
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `go test ./cmd/llm-usage -v`
+Run: `go test ./cmd/ccdash -v`
 Expected: FAIL — `undefined: teeSnippet`
 
 - [x] **Step 3: Write the implementation**
 
-Create `cmd/llm-usage/statusline.go`:
+Create `cmd/ccdash/statusline.go`:
 
 ```go
 package main
@@ -2393,7 +2393,7 @@ import (
 	"time"
 )
 
-const teeMarker = "# llm-usage-dashboard capture"
+const teeMarker = "# ccdash capture"
 
 func teeSnippet(capturePath string) string {
 	return fmt.Sprintf("\n%s\nprintf '%%s\\n' \"$input\" >> %s\n", teeMarker, capturePath)
@@ -2451,13 +2451,13 @@ func setupStatusline() error {
 
 - [x] **Step 4: Run tests to verify they pass**
 
-Run: `go test ./cmd/llm-usage -v`
+Run: `go test ./cmd/ccdash -v`
 Expected: PASS — two tests
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add cmd/llm-usage/statusline.go cmd/llm-usage/statusline_test.go
+git add cmd/ccdash/statusline.go cmd/ccdash/statusline_test.go
 git commit -m "feat(cli): setup-statusline with confirmation and backup"
 ```
 
@@ -2484,8 +2484,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 func seeded(t *testing.T) (*store.Store, *model.Pricing) {
@@ -2616,7 +2616,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/model"
 )
 
 type Filter struct {
@@ -3151,7 +3151,7 @@ git commit -m "feat(render): bar, sparkline, and braille primitives"
 
 **Files:**
 - Create: `internal/tui/tui.go`
-- Modify: `cmd/llm-usage/main.go` (dispatch the no-arg case to the TUI)
+- Modify: `cmd/ccdash/main.go` (dispatch the no-arg case to the TUI)
 - Test: `internal/tui/tui_test.go`
 
 **Interfaces:**
@@ -3172,14 +3172,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/model"
 )
 
 func TestViewRendersEmptyState(t *testing.T) {
 	m := Model{width: 80, height: 24, loaded: true}
 	out := m.View()
-	if !strings.Contains(out, "llm-usage ingest") {
+	if !strings.Contains(out, "ccdash ingest") {
 		t.Errorf("empty state must tell the user how to populate it:\n%s", out)
 	}
 }
@@ -3246,7 +3246,7 @@ func TestToolFilterKeys(t *testing.T) {
 
 In `internal/agg/agg.go`, rename the struct `Totals` → `TotalsResult`; the
 function signature becomes `func Totals(db *sql.DB, p *model.Pricing, f Filter) (TotalsResult, error)`.
-Update `internal/agg/agg_test.go` and `cmd/llm-usage/main.go` accordingly, then
+Update `internal/agg/agg_test.go` and `cmd/ccdash/main.go` accordingly, then
 replace `agg.Totals2` with `agg.TotalsResult` in the test above.
 
 Run: `go build ./... && go test ./internal/agg -v`
@@ -3277,10 +3277,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/render"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/render"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 var (
@@ -3398,14 +3398,14 @@ func (m Model) View() string {
 	}
 	var b strings.Builder
 
-	b.WriteString(head.Render("llm-usage"))
+	b.WriteString(head.Render("ccdash"))
 	if m.filter.Tool != "" {
 		b.WriteString(dim.Render(fmt.Sprintf("  [%s only]", m.filter.Tool)))
 	}
 	b.WriteString("\n")
 
 	if m.totals.Requests == 0 {
-		b.WriteString(dim.Render("no data yet — run `llm-usage ingest`\n"))
+		b.WriteString(dim.Render("no data yet — run `ccdash ingest`\n"))
 		b.WriteString(dim.Render("\n[q]uit\n"))
 		return b.String()
 	}
@@ -3521,7 +3521,7 @@ func Run(st *store.Store, p *model.Pricing) error {
 
 - [x] **Step 5: Wire the no-arg case to the TUI**
 
-In `cmd/llm-usage/main.go`, split the `case "ingest", "":` branch so that `""`
+In `cmd/ccdash/main.go`, split the `case "ingest", "":` branch so that `""`
 ingests and then launches the TUI:
 
 ```go
@@ -3544,7 +3544,7 @@ ingests and then launches the TUI:
 		// …unchanged…
 ```
 
-with `"github.com/seanochang/llm-usage-dashboard/internal/tui"` imported.
+with `"github.com/seanochang/ccdash/internal/tui"` imported.
 
 - [x] **Step 6: Run tests to verify they pass**
 
@@ -3554,9 +3554,9 @@ Expected: PASS — five tests
 - [x] **Step 7: Full build and manual smoke test**
 
 ```bash
-CGO_ENABLED=0 go build -o llm-usage ./cmd/llm-usage
+CGO_ENABLED=0 go build -o ccdash ./cmd/ccdash
 go test ./... -race
-./llm-usage
+./ccdash
 ```
 Expected: tests all green; the TUI opens showing totals, a cost/day chart, model
 and project breakdowns, and a limits panel. Press `q` to exit.
@@ -3564,7 +3564,7 @@ and project breakdowns, and a limits panel. Press `q` to exit.
 - [x] **Step 8: Commit**
 
 ```bash
-git add internal/tui cmd/llm-usage internal/agg
+git add internal/tui cmd/ccdash internal/agg
 git commit -m "feat(tui): Overview screen with totals, charts, projects, and limits"
 ```
 

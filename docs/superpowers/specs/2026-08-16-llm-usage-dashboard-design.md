@@ -1,4 +1,4 @@
-# llm-usage-dashboard — Phase 1 Design
+# ccdash — Phase 1 Design
 
 **Date:** 2026-08-16
 **Status:** Approved design, pending implementation plan
@@ -30,9 +30,9 @@ The tool therefore ingests into a durable store that outlives its sources.
 - Quota/limit ingestion from all three sources (§3.4), with provenance labels:
   Claude session, weekly-all-models, and per-model weekly (e.g. Fable); Codex
   5-hour and weekly.
-- `llm-usage ingest` — headless, prints a summary; usable from cron/CI.
-- `llm-usage setup-statusline` — opt-in, confirmed capture installation.
-- `llm-usage` — a TUI with one screen (Overview): totals, a time series, a model
+- `ccdash ingest` — headless, prints a summary; usable from cron/CI.
+- `ccdash setup-statusline` — opt-in, confirmed capture installation.
+- `ccdash` — a TUI with one screen (Overview): totals, a time series, a model
   breakdown, a per-project ranking, and a limits panel.
 
 ### Explicitly out of scope for Phase 1
@@ -232,10 +232,10 @@ a JSON payload to its stdin containing `.rate_limits.five_hour` and
 `.context_window`. This is the only live Claude quota channel; it is ephemeral
 unless captured.
 
-`llm-usage setup-statusline` appends a tee to the user's statusline script:
+`ccdash setup-statusline` appends a tee to the user's statusline script:
 
 ```sh
-printf '%s\n' "$input" >> ~/.local/share/llm-usage-dashboard/statusline.jsonl
+printf '%s\n' "$input" >> ~/.local/share/ccdash/statusline.jsonl
 ```
 
 The command **shows the exact diff and requires confirmation before writing**,
@@ -334,7 +334,7 @@ store an archive rather than a cache — when Claude prunes a transcript, the ro
 derived from it stay. Any future "clean up missing files" logic touches
 `source_file` only.
 
-Location: `~/.local/share/llm-usage-dashboard/usage.db` (honouring
+Location: `~/.local/share/ccdash/usage.db` (honouring
 `XDG_DATA_HOME`). Driver: `modernc.org/sqlite` (pure Go, preserves the
 static-binary property; no CGO).
 
@@ -441,7 +441,7 @@ base tier and the assumption is stated in §13.
 - **Model IDs must be normalized before lookup.** Claude Code emits both
   `claude-haiku-4-5` and `claude-haiku-4-5-20251001`; a naive table drops the
   dated form. Strip a trailing `-YYYYMMDD` and retry.
-- **The table lives in `~/.config/llm-usage-dashboard/pricing.toml`**, written
+- **The table lives in `~/.config/ccdash/pricing.toml`**, written
   with defaults on first run and editable thereafter. Rates change, introductory
   pricing expires (Sonnet 5 is $2/$10 through 2026-08-31, $3/$15 after), and
   **Codex/OpenAI rates are not shipped** — they are the user's to supply.
@@ -489,7 +489,7 @@ iTerm2 inside tmux 3.7b, which mangles all three; `COLORTERM=truecolor` confirms
 the color path.
 
 ```
-┌─ llm-usage ─────────────────────── 2026-07-25 → 08-16 · 11,599 req ─┐
+┌─ ccdash ─────────────────────── 2026-07-25 → 08-16 · 11,599 req ─┐
 │  1,413.1M tokens      $1,635.08 at API rates     cache read 96.1%   │
 ├──────────────────────────────────┬──────────────────────────────────┤
 │  cost / day                      │  by model                        │
@@ -535,7 +535,7 @@ Charts come from `ntcharts`; panels, borders, and color from `lipgloss`.
 | Unreadable file | Skip file, record path, continue; report count at end |
 | Unknown model | Store the row, increment `unpriced`, show badge |
 | Codex accumulator restart | Emit delta = new value, set `anomaly`, count it |
-| Empty database | Overview renders an empty state prompting `llm-usage ingest` |
+| Empty database | Overview renders an empty state prompting `ccdash ingest` |
 | Corrupt DB | Report the path and the command to remove it; never auto-delete |
 
 The tool never deletes anything in `~/.claude` or `~/.codex`. It opens those
@@ -579,7 +579,7 @@ checked into `testdata/reference/` as an executable oracle, and CI runs a
 differential check:
 
 ```
-go run ./cmd/llm-usage ingest --json  >  got.json
+go run ./cmd/ccdash ingest --json  >  got.json
 python3 testdata/reference/snapshot.py --json  >  want.json
 diff got.json want.json          # must be identical
 ```
@@ -602,13 +602,13 @@ test covers everything the fixtures did not anticipate.
 ## 10. CLI surface
 
 ```
-llm-usage                     ingest, then open the TUI
-llm-usage ingest              headless; prints the summary table; cron-safe
-llm-usage ingest --full       ignore cursors, reparse everything
-llm-usage limits              print current limits and exit (scriptable)
-llm-usage setup-statusline    add the capture tee; shows a diff, asks first
-llm-usage --db PATH           override store location
-llm-usage version
+ccdash                     ingest, then open the TUI
+ccdash ingest              headless; prints the summary table; cron-safe
+ccdash ingest --full       ignore cursors, reparse everything
+ccdash limits              print current limits and exit (scriptable)
+ccdash setup-statusline    add the capture tee; shows a diff, asks first
+ccdash --db PATH           override store location
+ccdash version
 ```
 
 `export` and `daemon` are Phase 2+.
@@ -647,8 +647,8 @@ streaming updates start earning their keep.
 4. `internal/source/codex` — rollout parser + fixtures 2, 3, 4, 12.
 5. `internal/source/limits` — `~/.claude.json` + statusline capture
    + fixtures 10, 11, 13.
-6. `cmd/llm-usage ingest` + `limits` — wire it up; reproduce §2's numbers.
-7. `cmd/llm-usage setup-statusline` — confirmed, backed-up tee installation.
+6. `cmd/ccdash ingest` + `limits` — wire it up; reproduce §2's numbers.
+7. `cmd/ccdash setup-statusline` — confirmed, backed-up tee installation.
 8. `internal/agg` — the five queries.
 9. `internal/render` + `internal/tui` — Overview screen incl. limits panel.
 
