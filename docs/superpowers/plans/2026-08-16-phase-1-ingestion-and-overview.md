@@ -57,14 +57,14 @@
 - Consumes: nothing
 - Produces: `model.Tool` (`ToolClaude`, `ToolCodex`), `model.Record`, `model.LimitKind` (`KindSession`, `KindWeeklyAll`, `KindWeeklyScoped`, `KindCodex5h`, `KindCodexWeekly`), `model.Provenance` (`ProvLive`, `ProvCached`), `model.LimitSample`, `model.NormalizeModel(string) string`
 
-- [ ] **Step 1: Initialize the module**
+- [x] **Step 1: Initialize the module**
 
 ```bash
 cd llm-usage-dashboard
 go mod init github.com/seanochang/llm-usage-dashboard
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `internal/model/normalize_test.go`:
 
@@ -93,12 +93,12 @@ func TestNormalizeModel(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/model -run TestNormalizeModel -v`
 Expected: FAIL — build error, `undefined: NormalizeModel`
 
-- [ ] **Step 4: Write the types**
+- [x] **Step 4: Write the types**
 
 Create `internal/model/types.go`:
 
@@ -165,7 +165,7 @@ type LimitSample struct {
 }
 ```
 
-- [ ] **Step 5: Write the implementation**
+- [x] **Step 5: Write the implementation**
 
 Create `internal/model/normalize.go`:
 
@@ -194,12 +194,12 @@ func NormalizeModel(id string) string {
 }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `go test ./internal/model -run TestNormalizeModel -v`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add go.mod internal/model
@@ -218,7 +218,7 @@ git commit -m "feat(model): core types and model-ID normalization"
 - Consumes: `model.Record` (Task 1)
 - Produces: `model.Rate{Input, CachedInput, CacheWrite5m, CacheWrite1h, Output float64}`, `model.Pricing`, `model.DefaultPricing() *Pricing`, `model.LoadPricing(path string) (*Pricing, error)`, `(*Pricing).Cost(r Record) (float64, bool)`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/model/pricing_test.go`:
 
@@ -303,12 +303,12 @@ func TestLoadPricingCreatesDefault(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/model -run TestCost -v`
 Expected: FAIL — `undefined: DefaultPricing`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `internal/model/pricing.go`. Rates are absolute USD per million tokens; a zero field means no charge.
 
@@ -501,12 +501,12 @@ func defaultTOML() string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./internal/model -v`
 Expected: PASS (all five pricing tests plus normalization)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/model
@@ -525,7 +525,7 @@ git commit -m "feat(model): absolute-rate pricing table with Anthropic and OpenA
 - Consumes: `model.Record`, `model.LimitSample`, `model.Tool` (Task 1)
 - Produces: `store.Store`, `store.Open(path string) (*Store, error)`, `(*Store).Close() error`, `(*Store).UpsertRecords([]model.Record) (int, error)`, `(*Store).Cursor(path string) (size, mtime, offset int64, ok bool)`, `(*Store).SetCursor(path string, tool model.Tool, size, mtime, offset int64) error`, `(*Store).DeleteCursor(path string) error`, `(*Store).NoteUnpriced(modelID string, at time.Time) error`, `(*Store).Unpriced() (map[string]int, error)`, `(*Store).InsertLimitIfChanged(model.LimitSample) (bool, error)`, `(*Store).DB() *sql.DB`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/store/store_test.go`:
 
@@ -660,7 +660,7 @@ func TestUnpricedTracking(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 go get modernc.org/sqlite@v1.56.0
@@ -668,7 +668,7 @@ go test ./internal/store -v
 ```
 Expected: FAIL — `undefined: Open`
 
-- [ ] **Step 3: Write the schema**
+- [x] **Step 3: Write the schema**
 
 Create `internal/store/schema.go`:
 
@@ -714,7 +714,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 `
 ```
 
-- [ ] **Step 4: Write the store**
+- [x] **Step 4: Write the store**
 
 Create `internal/store/store.go`:
 
@@ -877,12 +877,12 @@ func boolInt(b bool) int {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `go test ./internal/store -v -race`
 Expected: PASS — all five tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/store go.mod go.sum
@@ -901,7 +901,7 @@ git commit -m "feat(store): archive schema, cursors, idempotent upsert, limit ch
 - Consumes: `model.Record`, `model.Tool` (Task 1)
 - Produces: `source.FileRef{Path string; Size, Mtime int64}`, `source.Result{Records []model.Record; Limits []model.LimitSample; Offset int64}`, `source.Source` interface with `Name() model.Tool`, `Discover() ([]FileRef, error)`, `Parse(FileRef, int64) (Result, error)`; `claude.New(root string) *Source`
 
-- [ ] **Step 1: Write the fixture**
+- [x] **Step 1: Write the fixture**
 
 Create `internal/source/claude/testdata/basic.jsonl`. Lines 1–3 are the same request written three times (streaming duplication); line 4 is a distinct request with a 5-minute cache write.
 
@@ -913,7 +913,7 @@ Create `internal/source/claude/testdata/basic.jsonl`. Lines 1–3 are the same r
 {"type":"assistant","timestamp":"2026-08-15T23:58:46.000Z","sessionId":"s1","cwd":"/home/u/projA","requestId":"req_B","message":{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":5,"cache_creation_input_tokens":50,"cache_read_input_tokens":0,"output_tokens":7,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":50}}}}
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `internal/source/claude/claude_test.go`:
 
@@ -996,12 +996,12 @@ func TestSubagentAttributionFromPath(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/source/claude -v`
 Expected: FAIL — `undefined: New`
 
-- [ ] **Step 4: Write the source interface**
+- [x] **Step 4: Write the source interface**
 
 Create `internal/source/source.go`:
 
@@ -1031,7 +1031,7 @@ type Source interface {
 }
 ```
 
-- [ ] **Step 5: Write the Claude parser**
+- [x] **Step 5: Write the Claude parser**
 
 Create `internal/source/claude/claude.go`:
 
@@ -1190,12 +1190,12 @@ func (s *Source) Parse(f source.FileRef, from int64) (source.Result, error) {
 }
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `go test ./internal/source/claude -v`
 Expected: PASS — four tests
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/source
@@ -1214,7 +1214,7 @@ git commit -m "feat(source/claude): transcript parser with dedupe, cache tiers, 
 - Consumes: `source.FileRef`, `source.Result` (Task 4), `model.Record` (Task 1)
 - Produces: `codex.New(root string) *Source` satisfying `source.Source`
 
-- [ ] **Step 1: Write the fixture**
+- [x] **Step 1: Write the fixture**
 
 Create `internal/source/codex/testdata/rollout.jsonl`. Event 2 repeats event 1's totals unchanged (the 42.7% duplicate case); event 4 restarts the accumulator.
 
@@ -1227,7 +1227,7 @@ Create `internal/source/codex/testdata/rollout.jsonl`. Event 2 repeats event 1's
 {"type":"event_msg","timestamp":"2026-08-15T13:23:00.000Z","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":400,"cached_input_tokens":300,"cache_write_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":420}}}}
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `internal/source/codex/codex_test.go`:
 
@@ -1330,12 +1330,12 @@ func TestWindowMinutesMapToLimitKind(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/source/codex -v`
 Expected: FAIL — `undefined: New`
 
-- [ ] **Step 4: Write the parser**
+- [x] **Step 4: Write the parser**
 
 Create `internal/source/codex/codex.go`:
 
@@ -1558,12 +1558,12 @@ func (s *Source) Parse(f source.FileRef, from int64) (source.Result, error) {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `go test ./internal/source/codex -v`
 Expected: PASS — five tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/source/codex
@@ -1582,7 +1582,7 @@ git commit -m "feat(source/codex): cumulative-to-delta parser with restart flagg
 - Consumes: `source.FileRef`, `source.Result` (Task 4), `model.LimitSample` (Task 1)
 - Produces: `limits.NewClaudeJSON(path string) *ClaudeJSON`, `limits.NewStatusline(path string) *Statusline`, both satisfying `source.Source`
 
-- [ ] **Step 1: Write the fixtures**
+- [x] **Step 1: Write the fixtures**
 
 Create `internal/source/limits/testdata/claude.json`:
 
@@ -1601,7 +1601,7 @@ Create `internal/source/limits/testdata/statusline.jsonl`:
 {"model":{"display_name":"Opus 5"},"rate_limits":{"five_hour":{"used_percentage":22,"resets_at":"2026-08-16T20:00:00+00:00"},"seven_day":{"used_percentage":15,"resets_at":"2026-08-17T16:59:59+00:00"}}}
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `internal/source/limits/limits_test.go`:
 
@@ -1698,12 +1698,12 @@ func TestClaudeJSONMissingFileIsNotAnError(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/source/limits -v`
 Expected: FAIL — `undefined: NewClaudeJSON`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `internal/source/limits/limits.go`:
 
@@ -1873,12 +1873,12 @@ func (s *Statusline) Parse(f source.FileRef, from int64) (source.Result, error) 
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `go test ./internal/source/limits -v`
 Expected: PASS — three tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/source/limits
@@ -1897,7 +1897,7 @@ git commit -m "feat(source/limits): cached claude.json and live statusline limit
 - Consumes: everything from Tasks 1–6
 - Produces: `ingest.Stats{Files, Scanned, Inserted, Limits, Unpriced int}`, `ingest.Run(st *store.Store, srcs []source.Source, p *model.Pricing, full bool) (Stats, error)`, `ingest.DefaultSources(home string) []source.Source`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/ingest/ingest_test.go`:
 
@@ -1991,16 +1991,16 @@ type sourceIface = interface {
 > `Run(st, []source.Source{claude.New(dir)}, p, false)`. Written out here so the
 > intent is unambiguous.
 
-- [ ] **Step 2: Simplify the test to the real signature**
+- [x] **Step 2: Simplify the test to the real signature**
 
 Replace the alias block and both `toSources(...)` calls so the file uses `[]source.Source{claude.New(dir)}` directly, and add `"github.com/seanochang/llm-usage-dashboard/internal/source"` to the imports.
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/ingest -v`
 Expected: FAIL — `undefined: Run`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `internal/ingest/ingest.go`:
 
@@ -2128,16 +2128,16 @@ func Run(st *store.Store, srcs []source.Source, p *model.Pricing, full bool) (St
 }
 ```
 
-- [ ] **Step 5: Simplify the double offset computation**
+- [x] **Step 5: Simplify the double offset computation**
 
 The `jobs` construction above computes `from` twice. Collapse it: store `from` on the job struct in the first pass and use it in the goroutine. Run `go vet ./...` and confirm no unused variables remain.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `go test ./internal/ingest -v -race`
 Expected: PASS — two tests
 
-- [ ] **Step 7: Write the CLI**
+- [x] **Step 7: Write the CLI**
 
 Create `cmd/llm-usage/main.go`:
 
@@ -2299,7 +2299,7 @@ func resetIn(s agg.LimitState) string {
 
 with `"time"` added to imports.
 
-- [ ] **Step 8: Build and run against the real corpus**
+- [x] **Step 8: Build and run against the real corpus**
 
 ```bash
 go build -o llm-usage ./cmd/llm-usage
@@ -2312,7 +2312,7 @@ python3 testdata/reference/snapshot.py
 ```
 The Claude request count and cost must agree.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add internal/ingest cmd/llm-usage
@@ -2331,7 +2331,7 @@ git commit -m "feat(ingest): orchestration with bounded fan-out and the ingest/l
 - Consumes: `dataDir()` (Task 7)
 - Produces: `setupStatusline() error`, `teeSnippet(capturePath string) string`, `alreadyInstalled(script, capturePath string) bool`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `cmd/llm-usage/statusline_test.go`:
 
@@ -2372,12 +2372,12 @@ func contains(hay, needle string) bool {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./cmd/llm-usage -v`
 Expected: FAIL — `undefined: teeSnippet`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `cmd/llm-usage/statusline.go`:
 
@@ -2449,12 +2449,12 @@ func setupStatusline() error {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./cmd/llm-usage -v`
 Expected: PASS — two tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cmd/llm-usage/statusline.go cmd/llm-usage/statusline_test.go
@@ -2473,7 +2473,7 @@ git commit -m "feat(cli): setup-statusline with confirmation and backup"
 - Consumes: `*sql.DB` from `store.DB()`, `*model.Pricing`
 - Produces: `agg.Filter{From, To time.Time; Tool model.Tool; Project string}`, `agg.Totals(db, p, f) (Totals, error)` where `Totals{Requests int; Tokens, Input, Output, CacheRead, CacheWrite int64; Cost, MainCost, SubCost float64; From, To time.Time}`, `agg.ByDay(db, p, f) ([]DayBucket, error)` where `DayBucket{Day time.Time; Tokens int64; Cost float64}`, `agg.ByModel(db, p, f) ([]ModelBucket, error)` where `ModelBucket{Model string; Requests int; OutputTok int64; Cost float64}`, `agg.ByProject(db, p, f) ([]ProjectBucket, error)` where `ProjectBucket{Project string; Cost float64; Spark []float64}`, `agg.LatestLimits(db) ([]LimitState, error)` where `LimitState{model.LimitSample; Age time.Duration}`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/agg/agg_test.go`:
 
@@ -2598,12 +2598,12 @@ func TestLatestLimitsReturnsNewestPerKind(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/agg -v`
 Expected: FAIL — `undefined: Totals`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `internal/agg/agg.go`. Cost is computed in Go from stored token columns rather than in SQL, so editing `pricing.toml` re-prices history with no re-ingest.
 
@@ -2883,12 +2883,12 @@ func LatestLimits(db *sql.DB) ([]LimitState, error) {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./internal/agg -v -race`
 Expected: PASS — five tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agg
@@ -2907,7 +2907,7 @@ git commit -m "feat(agg): totals, day/model/project rollups, latest limits"
 - Consumes: nothing
 - Produces: `render.Bar(frac float64, width int) string`, `render.Sparkline(vals []float64) string`, `render.Braille(series []float64, w, h int) string`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/render/render_test.go`:
 
@@ -2977,12 +2977,12 @@ func TestBrailleDimensions(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/render -v`
 Expected: FAIL — `undefined: Bar`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `internal/render/render.go`:
 
@@ -3133,12 +3133,12 @@ func Braille(series []float64, w, h int) string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./internal/render -v`
 Expected: PASS — four tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/render
@@ -3158,7 +3158,7 @@ git commit -m "feat(render): bar, sparkline, and braille primitives"
 - Consumes: `agg.*` (Task 9), `render.*` (Task 10), `store.Store` (Task 3), `model.Pricing` (Task 2)
 - Produces: `tui.New(st *store.Store, p *model.Pricing) Model`, `tui.Model` satisfying `tea.Model`, `tui.Run(st, p) error`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tui/tui_test.go`:
 
@@ -3242,7 +3242,7 @@ func TestToolFilterKeys(t *testing.T) {
 > `Totals`. Update Task 9's references and this test to `agg.TotalsResult`
 > before running.
 
-- [ ] **Step 2: Apply the rename**
+- [x] **Step 2: Apply the rename**
 
 In `internal/agg/agg.go`, rename the struct `Totals` → `TotalsResult`; the
 function signature becomes `func Totals(db *sql.DB, p *model.Pricing, f Filter) (TotalsResult, error)`.
@@ -3252,12 +3252,12 @@ replace `agg.Totals2` with `agg.TotalsResult` in the test above.
 Run: `go build ./... && go test ./internal/agg -v`
 Expected: PASS
 
-- [ ] **Step 3: Run the TUI test to verify it fails**
+- [x] **Step 3: Run the TUI test to verify it fails**
 
 Run: `go test ./internal/tui -v`
 Expected: FAIL — `undefined: Model`
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 ```bash
 go get github.com/charmbracelet/bubbletea@v1.3.10
@@ -3519,7 +3519,7 @@ func Run(st *store.Store, p *model.Pricing) error {
 }
 ```
 
-- [ ] **Step 5: Wire the no-arg case to the TUI**
+- [x] **Step 5: Wire the no-arg case to the TUI**
 
 In `cmd/llm-usage/main.go`, split the `case "ingest", "":` branch so that `""`
 ingests and then launches the TUI:
@@ -3546,12 +3546,12 @@ ingests and then launches the TUI:
 
 with `"github.com/seanochang/llm-usage-dashboard/internal/tui"` imported.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `go test ./internal/tui -v`
 Expected: PASS — five tests
 
-- [ ] **Step 7: Full build and manual smoke test**
+- [x] **Step 7: Full build and manual smoke test**
 
 ```bash
 CGO_ENABLED=0 go build -o llm-usage ./cmd/llm-usage
@@ -3561,7 +3561,7 @@ go test ./... -race
 Expected: tests all green; the TUI opens showing totals, a cost/day chart, model
 and project breakdowns, and a limits panel. Press `q` to exit.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/tui cmd/llm-usage internal/agg
