@@ -1,4 +1,4 @@
-llm-usage
+/llm-usage
 *.db
 *.db-wal
 *.db-shm
