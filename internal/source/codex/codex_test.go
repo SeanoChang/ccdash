@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func fixtureRef(t *testing.T) source.FileRef {

@@ -9,11 +9,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/ingest"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/render"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/ingest"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/render"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 var (
@@ -156,7 +156,7 @@ func (m Model) View() string {
 		width = 80
 	}
 	var out strings.Builder
-	out.WriteString(headingStyle.Render("llm-usage"))
+	out.WriteString(headingStyle.Render("ccdash"))
 	if m.filter.Tool != "" {
 		out.WriteString(dimStyle.Render(fmt.Sprintf("  [%s only]", m.filter.Tool)))
 	}
@@ -170,7 +170,7 @@ func (m Model) View() string {
 	out.WriteByte('\n')
 
 	if m.totals.Requests == 0 {
-		out.WriteString(dimStyle.Render("no usage data yet — run `llm-usage ingest`\n"))
+		out.WriteString(dimStyle.Render("no usage data yet — run `ccdash ingest`\n"))
 	} else {
 		out.WriteString(fmt.Sprintf("%s tokens   %s   %d requests   cache read %.1f%%\n",
 			accentStyle.Render(formatTokens(m.totals.Tokens)),

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/model"
 	_ "modernc.org/sqlite"
 )
 

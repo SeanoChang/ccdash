@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 func seeded(t *testing.T) (*store.Store, *model.Pricing) {

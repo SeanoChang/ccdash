@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/claude"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
+	"github.com/seanochang/ccdash/internal/source/claude"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 const fixture = `{"type":"assistant","timestamp":"2026-08-15T00:00:00.000Z","sessionId":"s","cwd":"/p","requestId":"r1","message":{"model":"claude-opus-5","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":0}}}

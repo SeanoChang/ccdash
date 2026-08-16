@@ -6,12 +6,12 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/claude"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/codex"
-	"github.com/seanochang/llm-usage-dashboard/internal/source/limits"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/source"
+	"github.com/seanochang/ccdash/internal/source/claude"
+	"github.com/seanochang/ccdash/internal/source/codex"
+	"github.com/seanochang/ccdash/internal/source/limits"
+	"github.com/seanochang/ccdash/internal/store"
 )
 
 type Stats struct {
@@ -46,7 +46,7 @@ func DefaultSources(home string) []source.Source {
 		claude.New(filepath.Join(home, ".claude", "projects")),
 		codex.New(filepath.Join(home, ".codex", "sessions")),
 		limits.NewClaudeJSON(filepath.Join(home, ".claude.json")),
-		limits.NewStatusline(filepath.Join(home, ".local", "share", "llm-usage-dashboard", "statusline.jsonl")),
+		limits.NewStatusline(filepath.Join(home, ".local", "share", "ccdash", "statusline.jsonl")),
 	}
 }
 

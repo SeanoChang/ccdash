@@ -30,7 +30,7 @@ func TestAlreadyInstalledDetectsPriorTee(t *testing.T) {
 
 func TestStatuslineDiffShowsOnlyAddedLines(t *testing.T) {
 	diff := statuslineDiff("/tmp/status.sh", "#!/bin/sh\n", teeSnippet("/tmp/cap.jsonl"))
-	for _, want := range []string{"--- /tmp/status.sh", "+++ /tmp/status.sh", "+# llm-usage-dashboard capture", "+printf"} {
+	for _, want := range []string{"--- /tmp/status.sh", "+++ /tmp/status.sh", "+# ccdash capture", "+printf"} {
 		if !strings.Contains(diff, want) {
 			t.Errorf("diff missing %q:\n%s", want, diff)
 		}

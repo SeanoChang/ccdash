@@ -79,12 +79,12 @@ def compare(go_doc, reference):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--binary", required=True, help="path to the llm-usage binary")
+    parser.add_argument("--binary", required=True, help="path to the ccdash binary")
     args = parser.parse_args()
     binary = str(pathlib.Path(args.binary).resolve())
     snapshot_script = pathlib.Path(__file__).with_name("snapshot.py")
     source_home = pathlib.Path.home()
-    with tempfile.TemporaryDirectory(prefix="llm-usage-differential-") as temp:
+    with tempfile.TemporaryDirectory(prefix="ccdash-differential-") as temp:
         snapshot_home = pathlib.Path(temp, "home")
         snapshot_claude = snapshot_home / ".claude"
         snapshot_claude.mkdir(parents=True)

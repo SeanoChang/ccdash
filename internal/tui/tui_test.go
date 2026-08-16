@@ -7,13 +7,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/model"
 )
 
 func TestViewRendersEmptyState(t *testing.T) {
 	output := (Model{width: 80, height: 24, loaded: true}).View()
-	if !strings.Contains(output, "llm-usage ingest") {
+	if !strings.Contains(output, "ccdash ingest") {
 		t.Errorf("empty state = %s", output)
 	}
 }

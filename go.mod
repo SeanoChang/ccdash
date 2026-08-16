@@ -1,4 +1,4 @@
-module github.com/seanochang/llm-usage-dashboard
+module github.com/seanochang/ccdash
 
 go 1.26
 

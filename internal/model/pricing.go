@@ -173,7 +173,7 @@ func parseTOML(text string) (*Pricing, error) {
 
 func defaultTOML() string {
 	var b strings.Builder
-	b.WriteString("# llm-usage-dashboard pricing, absolute USD per million tokens.\n")
+	b.WriteString("# ccdash pricing, absolute USD per million tokens.\n")
 	b.WriteString("# Anthropic source: claude-api table cached 2026-06-24.\n")
 	b.WriteString("# OpenAI source: developers.openai.com/api/docs/pricing, retrieved 2026-08-16.\n")
 	b.WriteString("# An omitted component has no charge. Long-context rates are not auto-applied.\n\n")

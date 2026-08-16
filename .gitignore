@@ -1,4 +1,4 @@
-/llm-usage
+/ccdash
 *.db
 *.db-wal
 *.db-shm

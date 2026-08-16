@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const teeMarker = "# llm-usage-dashboard capture"
+const teeMarker = "# ccdash capture"
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/source"
+	"github.com/seanochang/ccdash/internal/source"
 )
 
 func parseFixture(t *testing.T, name string) source.Result {

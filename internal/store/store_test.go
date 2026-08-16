@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
+	"github.com/seanochang/ccdash/internal/model"
 )
 
 func openTmp(t *testing.T) *Store {

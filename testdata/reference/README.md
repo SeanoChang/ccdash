@@ -15,11 +15,11 @@ path rather than at the parsing rules.
 Run against the live corpus; they read `~/.claude` and `~/.codex` read-only.
 
 `snapshot.py --json` emits the Claude snapshot as stable structured data for
-field-by-field differential checks against `llm-usage ingest --full --json`
+field-by-field differential checks against `ccdash ingest --full --json`
 (`.tools.claude` plus `.ingest.by_tool.claude`).
 
 Run the end-to-end comparison against a built binary with:
 
 ```sh
-python3 testdata/reference/compare.py --binary ./llm-usage
+python3 testdata/reference/compare.py --binary ./ccdash
 ```

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/llm-usage-dashboard/internal/agg"
-	"github.com/seanochang/llm-usage-dashboard/internal/ingest"
-	"github.com/seanochang/llm-usage-dashboard/internal/model"
-	"github.com/seanochang/llm-usage-dashboard/internal/store"
-	"github.com/seanochang/llm-usage-dashboard/internal/tui"
+	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/ingest"
+	"github.com/seanochang/ccdash/internal/model"
+	"github.com/seanochang/ccdash/internal/store"
+	"github.com/seanochang/ccdash/internal/tui"
 )
 
 const version = "0.1.0"
@@ -30,18 +30,18 @@ type cliOptions struct {
 
 func dataDir() string {
 	if value := os.Getenv("XDG_DATA_HOME"); value != "" {
-		return filepath.Join(value, "llm-usage-dashboard")
+		return filepath.Join(value, "ccdash")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "llm-usage-dashboard")
+	return filepath.Join(home, ".local", "share", "ccdash")
 }
 
 func configDir() string {
 	if value := os.Getenv("XDG_CONFIG_HOME"); value != "" {
-		return filepath.Join(value, "llm-usage-dashboard")
+		return filepath.Join(value, "ccdash")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "llm-usage-dashboard")
+	return filepath.Join(home, ".config", "ccdash")
 }
 
 func main() {
@@ -146,11 +146,11 @@ func parseArgs(args []string) (cliOptions, error) {
 
 func usage() string {
 	return `Usage:
-  llm-usage [--db PATH]                 ingest, then open Overview
-  llm-usage [--db PATH] ingest [--full] [--json]
-  llm-usage [--db PATH] limits
-  llm-usage setup-statusline
-  llm-usage version
+  ccdash [--db PATH]                 ingest, then open Overview
+  ccdash [--db PATH] ingest [--full] [--json]
+  ccdash [--db PATH] limits
+  ccdash setup-statusline
+  ccdash version
 `
 }
 
@@ -324,7 +324,7 @@ func printLimits(dbOverride string, output io.Writer) error {
 		return err
 	}
 	if len(states) == 0 {
-		fmt.Fprintln(output, "no limit data — run `llm-usage setup-statusline` for live Claude limits")
+		fmt.Fprintln(output, "no limit data — run `ccdash setup-statusline` for live Claude limits")
 		return nil
 	}
 	for _, state := range states {
