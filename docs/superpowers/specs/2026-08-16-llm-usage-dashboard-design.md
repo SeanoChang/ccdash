@@ -27,16 +27,22 @@ The tool therefore ingests into a durable store that outlives its sources.
 
 - Ingest from both tools, handling every format hazard listed in §3.
 - A SQLite archive whose rows survive deletion of the source files.
+- Quota/limit ingestion from all three sources (§3.4), with provenance labels:
+  Claude session, weekly-all-models, and per-model weekly (e.g. Fable); Codex
+  5-hour and weekly.
 - `llm-usage ingest` — headless, prints a summary; usable from cron/CI.
-- `llm-usage` — a TUI with one screen (Overview) covering totals, a time series,
-  a model breakdown, and a per-project ranking.
+- `llm-usage setup-statusline` — opt-in, confirmed capture installation.
+- `llm-usage` — a TUI with one screen (Overview): totals, a time series, a model
+  breakdown, a per-project ranking, and a limits panel.
 
 ### Explicitly out of scope for Phase 1
 
-Deferred, in build order: live Radar view with `fsnotify` tailing; session and
-workflow forensics drill-down; the Archive management view (coverage/gaps/prune/
-export); `daemon --install` launchd integration. Phase 1 must not foreclose these
-— §4's schema carries the columns they need — but ships none of them.
+Deferred, in build order: live Radar view with `fsnotify` tailing and burn-rate
+projection; session and workflow forensics drill-down; the Archive management
+view (coverage/gaps/prune/export); quota *history* charting (the samples are
+captured in Phase 1, but only the latest state is rendered); `daemon --install`
+launchd integration. Phase 1 must not foreclose these — §4's schema carries the
+columns they need — but ships none of them.
 
 ---
 
@@ -67,6 +73,10 @@ frozen test constants; §9 defines how they are used in tests.
 | Fresh input tokens | 0.2 M of 1,413.1 M | |
 | Claude cost at API list rates | $1,635.08 | grows |
 | Unpriced models after normalization | `<synthetic>` only (18 rows) | |
+| Rate-limit keys in Claude transcripts | **zero matches, all 463 files** | |
+| Codex events with populated `secondary` | 17,297 | |
+| Codex limit windows observed | 300 min (5 h) and 10080 min (7 d) | |
+| `~/.claude.json` cache age when measured | **26 h 22 m** (its 5-hour reset already expired) | varies |
 
 Two of these shape the design more than the totals do:
 
@@ -176,9 +186,74 @@ canonical form is per-request deltas, so the adapter converts:
   The dedupe key is `<session-id>:<line-index-of-event>`, stable because files
   are append-only.
 
-`rate_limits` (quota window, reset time, plan) is parsed and stored in Phase 1
-but only rendered in Phase 2's Radar view. Claude transcripts carry no
-equivalent, so quota display will always be Codex-only.
+### 3.4 Limits — three sources, three provenances
+
+Quota data is not in Claude transcripts at all (verified: zero matches for any
+rate-limit key across all 463 files). It reaches disk by two other routes, and
+Codex uses a third. Each carries different freshness, so **every displayed limit
+is tagged with its provenance** — a percentage means something very different
+when it is 26 hours old.
+
+| Provenance | Source | Freshness | Covers |
+|---|---|---|---|
+| `live` | statusline JSONL capture (§3.4.1) | per render | Claude, only while a session runs |
+| `cached` | `~/.claude.json` → `cachedUsageUtilization` | hours to days | Claude, incl. per-model scoped limits |
+| `live` | Codex `token_count.rate_limits` | per turn | Codex 5-hour + weekly |
+
+**Claude, cached.** `~/.claude.json` carries a `cachedUsageUtilization` object
+with `fetchedAtMs` and a `utilization.limits[]` array. Measured live values:
+
+```json
+"limits": [
+  {"kind":"session",       "group":"session","percent":16,"resets_at":"2026-08-15T15:19:59Z","is_active":false},
+  {"kind":"weekly_all",    "group":"weekly", "percent":15,"resets_at":"2026-08-17T16:59:59Z","is_active":false},
+  {"kind":"weekly_scoped", "group":"weekly", "percent":19,"resets_at":"2026-08-17T16:59:59Z","is_active":true,
+   "scope":{"model":{"display_name":"Fable"}}}
+]
+```
+
+This is a **cache, not a feed** — observed 26h22m stale, with a
+`five_hour.resets_at` already in the past. It must never be shown without its
+age. Sibling keys `seven_day_opus` / `seven_day_sonnet` exist and are null,
+so the parser reads the `limits[]` array (which generalizes) rather than the
+named fields.
+
+**Codex, live.** Each `token_count` event carries `rate_limits.primary` and
+`.secondary`, each with `used_percent`, `window_minutes`, and `resets_at`.
+Measured: `window_minutes: 300` (5 hours) and `10080` (7 days), with a populated
+`secondary` on 17,297 events. Window length identifies the limit kind — do not
+assume primary is always the short window.
+
+#### 3.4.1 Statusline capture
+
+Claude Code invokes the configured statusline command once per render and writes
+a JSON payload to its stdin containing `.rate_limits.five_hour` and
+`.rate_limits.seven_day` (each with `used_percentage` and `resets_at`), plus
+`.context_window`. This is the only live Claude quota channel; it is ephemeral
+unless captured.
+
+`llm-usage setup-statusline` appends a tee to the user's statusline script:
+
+```sh
+printf '%s\n' "$input" >> ~/.local/share/llm-usage-dashboard/statusline.jsonl
+```
+
+The command **shows the exact diff and requires confirmation before writing**,
+backs up the original alongside it, and prints the snippet for manual addition
+as an alternative. It never edits the script silently. If the file is absent or
+the tee already present, it reports and exits without changes.
+
+The captured file is append-only and read with the same cursor mechanism as
+transcripts (§4.3).
+
+#### 3.4.2 Change-detection storage
+
+The statusline fires on every render and Codex emits `rate_limits` on every
+turn, so storing each observation would produce enormous, mostly-redundant
+tables. A sample is written **only when `percent` or `resets_at` differs from
+the most recent sample for the same `(tool, kind, scope)`**. That yields a
+compact time series with the transitions preserved and the flat stretches
+collapsed — enough to chart quota burn without storing a row per keystroke.
 
 ---
 
@@ -234,6 +309,21 @@ CREATE TABLE source_file (
 CREATE TABLE unpriced (
   model TEXT PRIMARY KEY, count INTEGER, first_seen INTEGER, last_seen INTEGER
 );
+
+-- quota observations; one row per change, not per observation (§3.4.2)
+CREATE TABLE limit_sample (
+  tool TEXT NOT NULL,          -- claude | codex
+  kind TEXT NOT NULL,          -- session | weekly_all | weekly_scoped
+                               -- | codex_5h | codex_weekly
+  scope TEXT NOT NULL DEFAULT '',  -- model display name; '' when unscoped
+  percent REAL NOT NULL,
+  resets_at INTEGER,           -- unix seconds; NULL when absent
+  is_active INTEGER DEFAULT 0, -- 1 = the binding limit
+  observed_at INTEGER NOT NULL,
+  provenance TEXT NOT NULL,    -- live | cached
+  PRIMARY KEY (tool, kind, scope, observed_at)
+);
+CREATE INDEX limit_latest ON limit_sample(tool, kind, scope, observed_at DESC);
 
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);  -- schema_version, etc.
 ```
@@ -312,7 +402,12 @@ func ByDay(db, filter) ([]DayBucket, error)      // date × tool × model
 func ByModel(db, filter) ([]ModelBucket, error)
 func ByProject(db, filter) ([]ProjectBucket, error)  // + 14-point sparkline
 func Totals(db, filter) (Totals, error)              // tokens, cost, counts, range
+func LatestLimits(db) ([]LimitState, error)          // newest sample per (tool,kind,scope)
 ```
+
+`LimitState` carries `Tool`, `Kind`, `Scope`, `Percent`, `ResetsAt`, `IsActive`,
+`ObservedAt`, and `Provenance`, plus a derived `Age` — the renderer needs the age
+to decide whether to show a staleness warning (§3.4).
 
 `Filter` carries a time range and optional tool/project/model. Each bucket
 carries token fields and a computed cost; cost is derived at query time from the
@@ -341,14 +436,28 @@ the color path.
 │  twn/data-cloud     ████████████████████  $601.00  ▃▅▂█▇█▅█         │
 │  sample-project  ████████████          $378.19  ▂▃▂▂▁▃▂▂         │
 │  ~/.claude          ███████               $236.94  ▁▂▁▃▂▁▂▃         │
+├─ limits ────────────────────────────────────────────────────────────┤
+│  claude  session   ▇▇░░░░░░░░  16%   resets 4h12m           live    │
+│  claude  weekly    ▇▇░░░░░░░░  15%   resets 1d 4h           live    │
+│  claude  Fable     ▇▇▇░░░░░░░  19%   resets 1d 4h  ◀ binding live   │
+│  codex   5h        ▇░░░░░░░░░   8%   resets 2h30m           live    │
+│  codex   weekly    ▇▇▇▇░░░░░░  34%   resets 3d              live    │
 ├─────────────────────────────────────────────────────────────────────┤
 │  main 40.3% · subagent 59.7%          ⚠ 1 unpriced model   [q]uit   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+The limits panel renders one row per `(tool, kind, scope)` from
+`agg.LatestLimits`. `◀ binding` marks `is_active`. The right column shows
+provenance: `live` in normal weight, or `⚠ cached 26h` in a warning color when
+the newest sample came from `~/.claude.json` (§3.4). A limit with no sample at
+all renders as `— no data` rather than `0%`, since those are very different
+statements.
+
 Keys: `1/2/3` filter tool (all / claude / codex) · `d/w/m` range (day / week /
 month) · `r` re-ingest · `q` quit. Layout reflows with `tea.WindowSizeMsg`;
-below ~80 columns the panels stack vertically.
+below ~80 columns the panels stack vertically and the limits panel drops its
+reset column before its bar.
 
 Charts come from `ntcharts`; panels, borders, and color from `lipgloss`.
 
@@ -388,6 +497,15 @@ checked into `testdata/`:
 8. **Idempotent ingest** — running twice over the same fixture leaves row counts
    unchanged.
 9. **Archive survival** — deleting a `source_file` row leaves `request` rows.
+10. **Claude cached limits** — a `cachedUsageUtilization` fixture yields three
+    rows (`session`, `weekly_all`, `weekly_scoped` scoped to `Fable`), each with
+    `provenance = cached` and `observed_at` taken from `fetchedAtMs`.
+11. **Statusline capture** — a statusline payload yields `session` and
+    `weekly_all` rows with `provenance = live`.
+12. **Codex window mapping** — `window_minutes: 300` maps to `codex_5h` and
+    `10080` to `codex_weekly`, regardless of primary/secondary position.
+13. **Change detection** — 50 identical consecutive observations insert one row;
+    a changed `percent` inserts a second.
 
 ### 9.1 Differential test against a reference implementation
 
@@ -420,10 +538,12 @@ test covers everything the fixtures did not anticipate.
 ## 10. CLI surface
 
 ```
-llm-usage                  ingest, then open the TUI
-llm-usage ingest           headless; prints the summary table; cron-safe
-llm-usage ingest --full    ignore cursors, reparse everything
-llm-usage --db PATH        override store location
+llm-usage                     ingest, then open the TUI
+llm-usage ingest              headless; prints the summary table; cron-safe
+llm-usage ingest --full       ignore cursors, reparse everything
+llm-usage limits              print current limits and exit (scriptable)
+llm-usage setup-statusline    add the capture tee; shows a diff, asks first
+llm-usage --db PATH           override store location
 llm-usage version
 ```
 
@@ -449,15 +569,19 @@ Verified to resolve on 2026-08-16 against `proxy.golang.org`:
 
 ## 12. Build sequence
 
-1. `internal/model` — Record, model-ID normalization, pricing + config file.
-2. `internal/store` — schema, migrations, cursors, idempotent upsert.
-3. `internal/source/claude` — parser + fixtures 1, 5, 6, 7.
-4. `internal/source/codex` — parser + fixtures 2, 3, 4.
-5. `cmd/llm-usage ingest` — wire it up; reproduce §2's numbers.
-6. `internal/agg` — the four queries.
-7. `internal/render` + `internal/tui` — Overview screen.
+1. `internal/model` — Record, LimitSample, model-ID normalization, pricing.
+2. `internal/store` — schema, migrations, cursors, idempotent upsert,
+   change-detection insert for limits.
+3. `internal/source/claude` — transcript parser + fixtures 1, 5, 6, 7.
+4. `internal/source/codex` — rollout parser + fixtures 2, 3, 4, 12.
+5. `internal/source/limits` — `~/.claude.json` + statusline capture
+   + fixtures 10, 11, 13.
+6. `cmd/llm-usage ingest` + `limits` — wire it up; reproduce §2's numbers.
+7. `cmd/llm-usage setup-statusline` — confirmed, backed-up tee installation.
+8. `internal/agg` — the five queries.
+9. `internal/render` + `internal/tui` — Overview screen incl. limits panel.
 
-Step 5 is the milestone: at that point the tool is already useful headlessly, and
+Step 6 is the milestone: at that point the tool is already useful headlessly, and
 every later step is additive.
 
 ---
