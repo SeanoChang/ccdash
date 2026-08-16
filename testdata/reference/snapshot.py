@@ -1,7 +1,7 @@
 """Single consistent snapshot of the Claude corpus — all acceptance figures
 computed in one pass so they cannot drift relative to each other.
 """
-import json, os, glob, time, collections
+import json, os, glob, time, collections, sys
 
 PRICE = {
     "claude-fable-5": (10.0, 50.0), "claude-mythos-5": (10.0, 50.0),
@@ -25,6 +25,7 @@ t0 = time.time()
 root = os.path.expanduser("~/.claude/projects")
 seen = set()
 c = collections.Counter()
+by_model = collections.defaultdict(collections.Counter)
 unpriced = collections.Counter()
 nfiles = nlines = nusage = 0
 
@@ -63,17 +64,27 @@ for p in glob.iglob(root + "/**/*.jsonl", recursive=True):
             w1 = cc.get("ephemeral_1h_input_tokens", 0)
             if not (w5 or w1):
                 w5 = cwf
+            cache_write = w5 + w1
             think = (u.get("output_tokens_details") or {}).get("thinking_tokens", 0)
 
-            c["tok"] += inp + out + cr + cwf
+            c["tok"] += inp + out + cr + cache_write
             c["in"] += inp
             c["out"] += out
             c["cr"] += cr
-            c["cw"] += cwf
+            c["cw"] += cache_write
             c["think"] += think
-            c["sub_tok" if is_sub else "main_tok"] += inp + out + cr + cwf
+            c["sub_tok" if is_sub else "main_tok"] += inp + out + cr + cache_write
 
-            m = norm(msg.get("model") or "?")
+            m = norm(msg.get("model") or "<unknown>")
+            model_totals = by_model[m]
+            model_totals["requests"] += 1
+            model_totals["tokens"] += inp + out + cr + w5 + w1
+            model_totals["input_tokens"] += inp
+            model_totals["output_tokens"] += out
+            model_totals["thinking_tokens"] += think
+            model_totals["cache_read_tokens"] += cr
+            model_totals["cache_write_5m_tokens"] += w5
+            model_totals["cache_write_1h_tokens"] += w1
             rate = PRICE.get(m)
             if rate is None:
                 unpriced[m] += 1
@@ -83,9 +94,49 @@ for p in glob.iglob(root + "/**/*.jsonl", recursive=True):
                     + w5 / M * ri * 1.25 + w1 / M * ri * 2.00)
             c["cost"] += cost
             c["sub_cost" if is_sub else "main_cost"] += cost
+            model_totals["cost_at_api_rates"] += cost
 
 el = time.time() - t0
 T = c["tok"]
+if "--json" in sys.argv:
+    models = []
+    for name, values in by_model.items():
+        row = {"model": name}
+        row.update({
+            "requests": values["requests"],
+            "tokens": values["tokens"],
+            "input_tokens": values["input_tokens"],
+            "output_tokens": values["output_tokens"],
+            "thinking_tokens": values["thinking_tokens"],
+            "cache_read_tokens": values["cache_read_tokens"],
+            "cache_write_5m_tokens": values["cache_write_5m_tokens"],
+            "cache_write_1h_tokens": values["cache_write_1h_tokens"],
+            "cost_at_api_rates": values["cost_at_api_rates"],
+        })
+        models.append(row)
+    models.sort(key=lambda row: (-row["cost_at_api_rates"], -row["requests"], row["model"]))
+    print(json.dumps({
+        "files": nfiles,
+        "usage_events": nusage,
+        "duplicates": nusage - len(seen),
+        "totals": {
+            "requests": len(seen),
+            "tokens": T,
+            "input_tokens": c["in"],
+            "output_tokens": c["out"],
+            "cache_read_tokens": c["cr"],
+            "cache_write_tokens": c["cw"],
+            "main_tokens": c["main_tok"],
+            "subagent_tokens": c["sub_tok"],
+            "cost_at_api_rates": c["cost"],
+            "main_cost_at_api_rates": c["main_cost"],
+            "subagent_cost_at_api_rates": c["sub_cost"],
+        },
+        "models": models,
+        "unpriced": dict(unpriced),
+    }, indent=2, sort_keys=True))
+    raise SystemExit(0)
+
 print(f"snapshot at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}  ({el:.2f}s)")
 print(f"  files                {nfiles:,}")
 print(f"  lines                {nlines:,}")

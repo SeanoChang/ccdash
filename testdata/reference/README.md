@@ -14,6 +14,12 @@ path rather than at the parsing rules.
 
 Run against the live corpus; they read `~/.claude` and `~/.codex` read-only.
 
-Neither script takes a `--json` flag yet. Adding one to `snapshot.py` is the
-first task of the differential test, so `got.json` and `want.json` can be
-compared field by field.
+`snapshot.py --json` emits the Claude snapshot as stable structured data for
+field-by-field differential checks against `llm-usage ingest --full --json`
+(`.tools.claude` plus `.ingest.by_tool.claude`).
+
+Run the end-to-end comparison against a built binary with:
+
+```sh
+python3 testdata/reference/compare.py --binary ./llm-usage
+```
