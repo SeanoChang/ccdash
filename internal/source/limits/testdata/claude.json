@@ -1,0 +1,5 @@
+{"cachedUsageUtilization":{"fetchedAtMs":1786803772956,"utilization":{"limits":[
+{"kind":"session","group":"session","percent":16,"severity":"normal","resets_at":"2026-08-15T15:19:59.941567+00:00","scope":null,"is_active":false},
+{"kind":"weekly_all","group":"weekly","percent":15,"severity":"normal","resets_at":"2026-08-17T16:59:59.941595+00:00","scope":null,"is_active":false},
+{"kind":"weekly_scoped","group":"weekly","percent":19,"severity":"normal","resets_at":"2026-08-17T16:59:59.941797+00:00","scope":{"model":{"id":null,"display_name":"Fable"}},"is_active":true}
+]}}}

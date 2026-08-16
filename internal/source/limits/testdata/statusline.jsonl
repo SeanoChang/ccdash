@@ -1,0 +1,2 @@
+{"model":{"display_name":"Opus 5"},"rate_limits":{"five_hour":{"used_percentage":21,"resets_at":"2026-08-16T20:00:00+00:00"},"seven_day":{"used_percentage":15,"resets_at":"2026-08-17T16:59:59+00:00"}}}
+{"model":{"display_name":"Opus 5"},"rate_limits":{"five_hour":{"used_percentage":22,"resets_at":"2026-08-16T20:00:00+00:00"},"seven_day":{"used_percentage":15,"resets_at":"2026-08-17T16:59:59+00:00"}}}
