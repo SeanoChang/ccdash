@@ -3,6 +3,7 @@ package tui
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/seanochang/ccdash/internal/agg"
+	"github.com/seanochang/ccdash/internal/ingest"
 	"github.com/seanochang/ccdash/internal/model"
 	"github.com/seanochang/ccdash/internal/store"
 )
@@ -102,7 +104,9 @@ func (m Model) breadcrumb() string {
 	return strings.Join(parts, " ")
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(m.scheduleTick(), m.refresh(false))
+}
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
@@ -112,6 +116,30 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.stack[i].table.SetSize(m.width, bodyHeight(m.height))
 		}
 		return m, nil
+	case tickMsg:
+		// Single-flight: a tick arriving mid-refresh is dropped outright, not
+		// queued and not rescheduled — the running refresh reschedules the
+		// ticker when it lands, so a duplicated chain of ticks dies here
+		// instead of compounding.
+		if m.inFlight {
+			return m, nil
+		}
+		// Prompts pause the work but not the ticker, so it resumes on close.
+		if m.mode != modeNormal {
+			return m, m.scheduleTick()
+		}
+		m.inFlight = true
+		return m, m.refresh(true)
+	case refreshedMsg:
+		m.inFlight = false
+		m.lastRefresh = message.at
+		m.refreshErr = message.err
+		if message.err == nil {
+			m.totals = message.totals
+			m.unpriced = message.unpriced
+			m.current().table.SetRows(message.rows)
+		}
+		return m, m.scheduleTick()
 	case tea.KeyMsg:
 		return m.handleKey(message)
 	}
@@ -163,6 +191,12 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setRange(30*24*time.Hour, "month")
 	case "a":
 		return m.setRange(0, "all")
+	case "r":
+		if m.inFlight {
+			return m, nil
+		}
+		m.inFlight = true
+		return m, m.refresh(true)
 	case ":":
 		m.mode = modeCommand
 		m.input = ""
@@ -324,7 +358,7 @@ func (m Model) footer() string {
 		return padLine(stylePrompt.Render(" /"+m.input+"█"), m.width)
 	}
 	left := m.breadcrumb()
-	right := "[enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
+	right := m.refreshAge() + "   [enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
 	if m.commandErr != "" {
 		right = styleWarning.Render(m.commandErr)
 	}
@@ -336,4 +370,77 @@ func (m Model) footer() string {
 		return padLine(" "+left, m.width)
 	}
 	return " " + left + strings.Repeat(" ", gap) + right + " "
+}
+
+// refreshInterval matches k9s's default. Not configurable in this phase.
+const refreshInterval = 2 * time.Second
+
+type tickMsg struct{}
+
+type refreshedMsg struct {
+	at       time.Time
+	totals   agg.TotalsResult
+	rows     []Row
+	unpriced int
+	err      error
+}
+
+func (m Model) scheduleTick() tea.Cmd {
+	return tea.Tick(refreshInterval, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+// refresh runs an incremental ingest and refetches the current view off the UI
+// thread. reingest is false for a plain data refetch.
+func (m Model) refresh(reingest bool) tea.Cmd {
+	st, pricing, entry := m.st, m.pricing, m.current()
+	if entry == nil {
+		return nil
+	}
+	view, scope := entry.view, entry.scope
+	global := m.scope
+	return func() tea.Msg {
+		now := time.Now()
+		if st == nil {
+			return refreshedMsg{at: now}
+		}
+		if reingest {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return refreshedMsg{at: now, err: err}
+			}
+			if _, err := ingest.Run(st, ingest.DefaultSources(home), pricing, false); err != nil {
+				return refreshedMsg{at: now, err: err}
+			}
+		}
+		totals, err := agg.Totals(st.DB(), pricing, global.Filter)
+		if err != nil {
+			return refreshedMsg{at: now, err: err}
+		}
+		rows, err := view.Rows(st.DB(), pricing, scope)
+		if err != nil {
+			return refreshedMsg{at: now, err: err}
+		}
+		unpriced, err := agg.UnpricedList(st.DB(), pricing, global.Filter)
+		if err != nil {
+			return refreshedMsg{at: now, err: err}
+		}
+		return refreshedMsg{
+			at: now, totals: totals, rows: rows, unpriced: len(unpriced),
+		}
+	}
+}
+
+func (m Model) refreshAge() string {
+	if m.lastRefresh.IsZero() {
+		return "never"
+	}
+	age := time.Since(m.lastRefresh)
+	switch {
+	case age < time.Minute:
+		return fmt.Sprintf("%ds ago", int(age.Seconds()))
+	case age < time.Hour:
+		return fmt.Sprintf("%dm ago", int(age.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(age.Hours()))
+	}
 }
