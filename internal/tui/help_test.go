@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // helpDocuments reports whether out documents this binding: some line carries
@@ -256,5 +257,184 @@ func TestHelpOverlayDoesNotLeakIntoPrompts(t *testing.T) {
 	}
 	if m.input != "?" {
 		t.Errorf("input = %q, want \"?\"", m.input)
+	}
+}
+
+// helpKeysOnLine reports the key strings this line draws as bindings. A row
+// draws one when its keys stand as a whole field — at the row's start or after
+// a column gutter, and followed by padding or the row's end — which is what
+// keeps the "/" inside "Page down / up", the ":" inside ":projects" and the "r"
+// inside "Manual refresh now" from being counted as bindings.
+func helpKeysOnLine(line string) []string {
+	plain := stripANSI(line)
+	drawn, seen := []string{}, map[string]bool{}
+	for _, binding := range helpBindings {
+		if seen[binding.keys] {
+			continue
+		}
+		pattern := regexp.MustCompile(`(?:^|\s{2,})` +
+			regexp.QuoteMeta(binding.keys) + `(?:\s|$)`)
+		if pattern.MatchString(plain) {
+			seen[binding.keys] = true
+			drawn = append(drawn, binding.keys)
+		}
+	}
+	return drawn
+}
+
+// helpKeysDrawn is every key string the body draws, plus the index of the first
+// line that draws any: the row the ways out have to be on once the overlay is
+// dropping bindings. The two "esc" rows share a key string, so a complete
+// overlay draws helpKeyStrings() of them, not len(helpBindings).
+func helpKeysDrawn(body []string) (map[string]bool, int) {
+	drawn, first := map[string]bool{}, -1
+	for i, line := range body {
+		keys := helpKeysOnLine(line)
+		if len(keys) > 0 && first < 0 {
+			first = i
+		}
+		for _, k := range keys {
+			drawn[k] = true
+		}
+	}
+	return drawn, first
+}
+
+// helpKeyStrings is how many distinct key strings the keymap has.
+func helpKeyStrings() int {
+	seen := map[string]bool{}
+	for _, binding := range helpBindings {
+		seen[binding.keys] = true
+	}
+	return len(seen)
+}
+
+// helpOwnsUp reports whether this text counts the bindings it is not showing,
+// in either the roomy form or the folded one.
+func helpOwnsUp(text string) bool {
+	plain := stripANSI(text)
+	return regexp.MustCompile(`… \d+ more`).MatchString(plain) ||
+		regexp.MustCompile(`\+\d+`).MatchString(plain)
+}
+
+func helpDump(body []string) string {
+	shown := make([]string, 0, len(body))
+	for _, line := range body {
+		shown = append(shown, "|"+stripANSI(line)+"|")
+	}
+	return strings.Join(shown, "\n")
+}
+
+// helpCrampedSizes are the viewports an adversarial pty sweep caught the
+// columned overlay failing at, written rows first the way a terminal reports
+// them. Every one of them showed either no binding at all or, at 8x30, one of
+// the two ways out.
+var helpCrampedSizes = []struct {
+	rows, cols int
+	// rowStarved marks a viewport too short for the grid its width could
+	// otherwise carry. There the heading and the command hint have to be gone:
+	// they are the first cells sacrificed, never the last.
+	rowStarved bool
+	// oneRow marks a viewport whose body is a single line, so the count of what
+	// was dropped has nowhere to go but onto that same line.
+	oneRow bool
+}{
+	{rows: 60, cols: 20},
+	{rows: 40, cols: 16},
+	{rows: 24, cols: 20},
+	{rows: 8, cols: 30, rowStarved: true},
+	{rows: 7, cols: 120, rowStarved: true},
+	{rows: 6, cols: 80, rowStarved: true},
+	{rows: 5, cols: 177, rowStarved: true, oneRow: true},
+	{rows: 4, cols: 120, rowStarved: true, oneRow: true},
+	{rows: 3, cols: 20, rowStarved: true, oneRow: true},
+}
+
+// TestHelpOverlayKeepsTheKeysWhenCramped is the whole point of the overlay at a
+// size that cannot hold it: cells are scarce, so the payload survives and the
+// furniture goes, never the reverse. At every one of these viewports the body
+// has at least one row, so it must carry at least one binding — the way out
+// first — and must own up to whatever it could not draw.
+func TestHelpOverlayKeepsTheKeysWhenCramped(t *testing.T) {
+	for _, size := range helpCrampedSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.rows, size.cols), func(t *testing.T) {
+			width, height := bodyWidth(size.cols), bodyHeight(size.rows)
+			body := helpBody(width, height)
+			if len(body) != height {
+				t.Fatalf("helpBody(%d,%d) drew %d lines, want exactly %d",
+					width, height, len(body), height)
+			}
+			for i, line := range body {
+				if got := lipgloss.Width(line); got != width {
+					t.Errorf("line %d is %d cells wide, want exactly %d: %q",
+						i, got, width, stripANSI(line))
+				}
+			}
+			drawn, first := helpKeysDrawn(body)
+			if len(drawn) == 0 {
+				t.Fatalf("%d body rows of %d cells and not one binding drawn:\n%s",
+					height, width, helpDump(body))
+			}
+			if !drawn["q ctrl-c"] {
+				t.Errorf("the overlay drops \"q ctrl-c\" — the row a stuck reader "+
+					"opened it for — while drawing %v:\n%s", drawn, helpDump(body))
+			}
+			if len(drawn) > 1 && !drawn[":q"] {
+				t.Errorf("%d bindings drawn and \":q\" is not among them; both ways "+
+					"out outrank every other binding:\n%s", len(drawn), helpDump(body))
+			}
+			if len(drawn) < helpKeyStrings() {
+				if first >= 0 && !contains(helpKeysOnLine(body[first]), "q ctrl-c") {
+					t.Errorf("bindings are being dropped, so \"q ctrl-c\" must lead; "+
+						"the first row of bindings is %q:\n%s",
+						stripANSI(body[first]), helpDump(body))
+				}
+				if !helpOwnsUp(strings.Join(body, "\n")) {
+					t.Errorf("%d of %d key rows drawn and the overlay says nothing "+
+						"about the rest:\n%s", len(drawn), helpKeyStrings(), helpDump(body))
+				}
+			}
+			if size.oneRow && len(drawn) < helpKeyStrings() &&
+				first >= 0 && !helpOwnsUp(body[first]) {
+				t.Errorf("the body is one row, so the count of what was dropped has "+
+					"to ride that row: %q", stripANSI(body[first]))
+			}
+			if size.rowStarved && strings.Contains(stripANSI(strings.Join(body, "\n")),
+				"Keybindings") {
+				t.Errorf("a viewport too short for the keymap spends a row on the "+
+					"heading instead:\n%s", helpDump(body))
+			}
+		})
+	}
+}
+
+// contains is strings.Contains for a slice; only the tests need it.
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestHelpOverlayFrameHoldsAtCrampedSizes runs the same viewports through the
+// real model: the frame stays exact, and wherever the frame has room for a body
+// row the reader can see a way out in it.
+func TestHelpOverlayFrameHoldsAtCrampedSizes(t *testing.T) {
+	for _, size := range helpCrampedSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.rows, size.cols), func(t *testing.T) {
+			out := openHelpAt(t, size.cols, size.rows)
+			// The frame gives the panel what is left after the header and the
+			// footer; the first of those rows is the border, the rest are body.
+			visible := size.rows - headerHeight(size.rows) - footerLines - 1
+			if visible < 1 {
+				return
+			}
+			if !strings.Contains(stripANSI(out), "q ctrl-c") {
+				t.Errorf("%d body rows on screen and no way out in them:\n%s",
+					visible, stripANSI(out))
+			}
+		})
 	}
 }
