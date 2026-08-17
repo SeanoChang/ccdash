@@ -399,6 +399,7 @@ func (m Model) View() string {
 	info := headerInfo{
 		DBPath:   m.dbPath,
 		Range:    m.rangeText(),
+		Tool:     string(m.scope.Tool),
 		Tokens:   formatTokens(m.totals.Tokens),
 		Cost:     fmt.Sprintf("$%.2f at API rates", m.totals.Cost),
 		Requests: fmt.Sprintf("%d", m.totals.Requests),
@@ -421,7 +422,7 @@ func (m Model) View() string {
 		}
 		title = m.bodyTitle(entry)
 	}
-	return frame(headerBlock(info, m.width), bodyPanel(title, body, m.width),
+	return frame(headerBlock(info, m.width, m.height), bodyPanel(title, body, m.width),
 		m.footer(), m.width, m.height)
 }
 
