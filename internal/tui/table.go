@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -157,4 +159,277 @@ func formatCell(cell Cell, column Column, width int, domain float64) string {
 		return strings.Repeat(" ", padding) + text
 	}
 	return text + strings.Repeat(" ", padding)
+}
+
+// Table owns presentation state for a resource: sorting, filtering, scrolling
+// and selection. Views supply data and know none of this.
+type Table struct {
+	columns  []Column
+	all      []Row
+	visible  []Row
+	filter   string
+	sortCol  int
+	sortDesc bool
+	sorted   bool
+	selected int
+	offset   int
+	width    int
+	height   int
+}
+
+func NewTable(columns []Column) *Table {
+	return &Table{columns: columns, sortCol: -1, width: 80, height: 10}
+}
+
+func (t *Table) SetSize(width, height int) {
+	t.width, t.height = width, height
+	t.clampViewport()
+}
+
+func (t *Table) TotalCount() int   { return len(t.all) }
+func (t *Table) VisibleCount() int { return len(t.visible) }
+
+// SetRows replaces the data, preserving the selected row by Key. When the key
+// is gone the selection clamps to the nearest valid index.
+func (t *Table) SetRows(rows []Row) {
+	previousKey := ""
+	if row, ok := t.Selected(); ok {
+		previousKey = row.Key
+	}
+	previousIndex := t.selected
+	t.all = rows
+	t.apply()
+	t.selected = 0
+	if previousKey != "" {
+		for i, row := range t.visible {
+			if row.Key == previousKey {
+				t.selected = i
+				t.clampViewport()
+				return
+			}
+		}
+		t.selected = previousIndex
+	}
+	t.clampSelection()
+	t.clampViewport()
+}
+
+func (t *Table) SetFilter(filter string) {
+	t.filter = filter
+	t.apply()
+	t.clampSelection()
+	t.clampViewport()
+}
+
+// NextSort advances to the next sortable column, wrapping around.
+func (t *Table) NextSort() {
+	if len(t.columns) == 0 {
+		return
+	}
+	t.sortCol = (t.sortCol + 1) % len(t.columns)
+	t.sortDesc = false
+	t.sorted = true
+	t.apply()
+	t.clampSelection()
+}
+
+func (t *Table) ReverseSort() {
+	if !t.sorted {
+		return
+	}
+	t.sortDesc = !t.sortDesc
+	t.apply()
+	t.clampSelection()
+}
+
+func (t *Table) Move(delta int) {
+	t.selected += delta
+	t.clampSelection()
+	t.clampViewport()
+}
+
+func (t *Table) Page(delta int) { t.Move(delta * t.bodyHeight()) }
+func (t *Table) Home()          { t.selected = 0; t.clampViewport() }
+
+func (t *Table) End() {
+	t.selected = len(t.visible) - 1
+	t.clampSelection()
+	t.clampViewport()
+}
+
+func (t *Table) Selected() (Row, bool) {
+	if t.selected < 0 || t.selected >= len(t.visible) {
+		return Row{}, false
+	}
+	return t.visible[t.selected], true
+}
+
+// AtBottom reports whether the selection is on the last visible row, which is
+// the trigger for loading another page in a paginated view.
+func (t *Table) AtBottom() bool {
+	return len(t.visible) > 0 && t.selected == len(t.visible)-1
+}
+
+func (t *Table) bodyHeight() int {
+	if t.height <= 1 {
+		return 0
+	}
+	return t.height - 1 // one line for the column header
+}
+
+func (t *Table) clampSelection() {
+	if t.selected < 0 {
+		t.selected = 0
+	}
+	if t.selected >= len(t.visible) {
+		t.selected = len(t.visible) - 1
+	}
+	if t.selected < 0 {
+		t.selected = 0
+	}
+}
+
+func (t *Table) clampViewport() {
+	body := t.bodyHeight()
+	if body <= 0 {
+		t.offset = 0
+		return
+	}
+	if t.selected < t.offset {
+		t.offset = t.selected
+	}
+	if t.selected >= t.offset+body {
+		t.offset = t.selected - body + 1
+	}
+	maxOffset := len(t.visible) - body
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if t.offset > maxOffset {
+		t.offset = maxOffset
+	}
+	if t.offset < 0 {
+		t.offset = 0
+	}
+}
+
+// apply rebuilds visible from all by filtering then sorting.
+func (t *Table) apply() {
+	t.visible = t.filtered()
+	if t.sorted && t.sortCol >= 0 && t.sortCol < len(t.columns) {
+		column := t.columns[t.sortCol]
+		index := t.sortCol
+		sort.SliceStable(t.visible, func(i, j int) bool {
+			left, right := t.visible[i], t.visible[j]
+			if index >= len(left.Cells) || index >= len(right.Cells) {
+				return false
+			}
+			var less bool
+			switch column.Sort {
+			case SortNumeric, SortTime:
+				less = left.Cells[index].Value < right.Cells[index].Value
+			default:
+				less = left.Cells[index].Text < right.Cells[index].Text
+			}
+			if t.sortDesc {
+				return !less
+			}
+			return less
+		})
+	}
+}
+
+// filtered applies the current filter to the first column's text. A leading
+// "!" inverts the match; a leading "~" switches to a regular expression. An
+// invalid expression matches nothing rather than erroring out.
+func (t *Table) filtered() []Row {
+	if t.filter == "" {
+		return append([]Row(nil), t.all...)
+	}
+	pattern, invert := t.filter, false
+	if strings.HasPrefix(pattern, "!") {
+		invert, pattern = true, pattern[1:]
+	}
+	var expression *regexp.Regexp
+	if strings.HasPrefix(pattern, "~") {
+		compiled, err := regexp.Compile(pattern[1:])
+		if err != nil {
+			return nil
+		}
+		expression = compiled
+	}
+	needle := strings.ToLower(pattern)
+	result := make([]Row, 0, len(t.all))
+	for _, row := range t.all {
+		text := ""
+		if len(row.Cells) > 0 {
+			text = row.Cells[0].Text
+		}
+		var match bool
+		if expression != nil {
+			match = expression.MatchString(text)
+		} else {
+			match = strings.Contains(strings.ToLower(text), needle)
+		}
+		if match != invert {
+			result = append(result, row)
+		}
+	}
+	return result
+}
+
+// Render returns exactly height lines, each exactly width display cells: one
+// column header followed by body rows, blank-padded when there is not enough
+// data to fill the viewport.
+func (t *Table) Render() []string {
+	lines := make([]string, 0, t.height)
+	if t.height <= 0 || t.width <= 0 {
+		return lines
+	}
+	widths := computeWidths(t.columns, t.visible, t.width)
+	domains := make([]float64, len(t.columns))
+	for i, column := range t.columns {
+		if column.Kind == CellSparkline {
+			domains[i] = sparkDomain(t.visible, i)
+		}
+	}
+
+	header := make([]string, 0, len(t.columns))
+	for i, column := range t.columns {
+		title := column.Title
+		if t.sorted && i == t.sortCol {
+			marker := "↑"
+			if t.sortDesc {
+				marker = "↓"
+			}
+			title = truncateDisplay(title+marker, widths[i])
+		}
+		header = append(header, formatCell(Cell{Text: title},
+			Column{Align: column.Align, Kind: CellText}, widths[i], 0))
+	}
+	lines = append(lines, styleColumn.Render(strings.Join(header, " ")))
+
+	body := t.bodyHeight()
+	for offset := 0; offset < body; offset++ {
+		index := t.offset + offset
+		if index >= len(t.visible) {
+			lines = append(lines, strings.Repeat(" ", t.width))
+			continue
+		}
+		row := t.visible[index]
+		cells := make([]string, 0, len(t.columns))
+		for i, column := range t.columns {
+			cell := Cell{}
+			if i < len(row.Cells) {
+				cell = row.Cells[i]
+			}
+			cells = append(cells, formatCell(cell, column, widths[i], domains[i]))
+		}
+		line := strings.Join(cells, " ")
+		if index == t.selected {
+			line = styleSelected.Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
