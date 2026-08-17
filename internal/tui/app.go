@@ -20,6 +20,11 @@ type stackEntry struct {
 	view  View
 	scope Scope
 	table *Table
+	// pages and more are only meaningful for a view implementing Paginator:
+	// how many pages deep the user has scrolled, and whether the last fetch
+	// came back full and so may have a successor.
+	pages int
+	more  bool
 }
 
 type Model struct {
@@ -62,8 +67,14 @@ func New(st *store.Store, pricing *model.Pricing, dbPath string, root View,
 		rangeLabel: "all", width: 80, height: 24,
 		registry: registry,
 	}
-	m.stack = []stackEntry{{view: root, scope: m.scope, table: NewTable(root.Columns())}}
+	m.stack = []stackEntry{newEntry(root, m.scope)}
 	return m
+}
+
+// newEntry builds a stack level. pages starts at 1 so a paginated view opens
+// on its first page rather than on nothing.
+func newEntry(view View, scope Scope) stackEntry {
+	return stackEntry{view: view, scope: scope, table: NewTable(view.Columns()), pages: 1}
 }
 
 func (m Model) current() *stackEntry {
@@ -80,6 +91,27 @@ func (m Model) db() *sql.DB {
 	return m.st.DB()
 }
 
+// fetchRows loads a view's rows. A Paginator is asked for the entire prefix
+// the user has scrolled into — pages × PageSize rows from offset zero — so a
+// refresh keeps that depth instead of snapping back to the first page. more
+// reports whether the fetch came back full and so may have a successor.
+func fetchRows(view View, db *sql.DB, pricing *model.Pricing, scope Scope,
+	pages int) ([]Row, bool, error) {
+	paginator, ok := view.(Paginator)
+	if !ok {
+		rows, err := view.Rows(db, pricing, scope)
+		return rows, false, err
+	}
+	if pages < 1 {
+		pages = 1
+	}
+	size := paginator.PageSize()
+	if size < 1 {
+		size = 1
+	}
+	return paginator.Page(db, pricing, scope, 0, pages*size)
+}
+
 // reloadCurrent refetches the top view's rows into its table.
 func (m *Model) reloadCurrent() {
 	entry := m.current()
@@ -87,13 +119,29 @@ func (m *Model) reloadCurrent() {
 		return
 	}
 	entry.table.SetSize(m.width, bodyHeight(m.height))
-	rows, err := entry.view.Rows(m.db(), m.pricing, entry.scope)
+	rows, more, err := fetchRows(entry.view, m.db(), m.pricing, entry.scope, entry.pages)
 	if err != nil {
 		m.refreshErr = err
 		return
 	}
 	m.refreshErr = nil
+	entry.more = more
 	entry.table.SetRows(rows)
+}
+
+// loadMore extends a paginated view by one page once the selection reaches the
+// last loaded row. A view that is not a Paginator, or whose last fetch came
+// back short, is left alone.
+func (m *Model) loadMore() {
+	entry := m.current()
+	if entry == nil || !entry.more || !entry.table.AtBottom() {
+		return
+	}
+	if _, ok := entry.view.(Paginator); !ok {
+		return
+	}
+	entry.pages++
+	m.reloadCurrent()
 }
 
 func (m Model) breadcrumb() string {
@@ -137,7 +185,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if message.err == nil {
 			m.totals = message.totals
 			m.unpriced = message.unpriced
-			m.current().table.SetRows(message.rows)
+			entry := m.current()
+			entry.more = message.more
+			entry.table.SetRows(message.rows)
 		}
 		return m, m.scheduleTick()
 	case tea.KeyMsg:
@@ -159,16 +209,19 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "j", "down":
 		entry.table.Move(1)
+		m.loadMore()
 	case "k", "up":
 		entry.table.Move(-1)
 	case "ctrl+f":
 		entry.table.Page(1)
+		m.loadMore()
 	case "ctrl+b":
 		entry.table.Page(-1)
 	case "g":
 		entry.table.Home()
 	case "G":
 		entry.table.End()
+		m.loadMore()
 	case "s":
 		entry.table.NextSort()
 	case "S":
@@ -258,9 +311,7 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 		}
 		m.commandErr = ""
 		// A command replaces the whole stack: it is a jump, not a drill.
-		m.stack = []stackEntry{{
-			view: view, scope: m.scope, table: NewTable(view.Columns()),
-		}}
+		m.stack = []stackEntry{newEntry(view, m.scope)}
 		m.reloadCurrent()
 		return m, nil
 	}
@@ -277,9 +328,7 @@ func (m Model) drill() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	m.stack = append(m.stack, stackEntry{
-		view: next, scope: scope, table: NewTable(next.Columns()),
-	})
+	m.stack = append(m.stack, newEntry(next, scope))
 	m.reloadCurrent()
 	return m, nil
 }
@@ -387,6 +436,7 @@ type refreshedMsg struct {
 	at       time.Time
 	totals   agg.TotalsResult
 	rows     []Row
+	more     bool
 	unpriced int
 	err      error
 }
@@ -402,7 +452,7 @@ func (m Model) refresh(reingest bool) tea.Cmd {
 	if entry == nil {
 		return nil
 	}
-	view, scope := entry.view, entry.scope
+	view, scope, pages := entry.view, entry.scope, entry.pages
 	global := m.scope
 	return func() tea.Msg {
 		now := time.Now()
@@ -422,7 +472,7 @@ func (m Model) refresh(reingest bool) tea.Cmd {
 		if err != nil {
 			return refreshedMsg{at: now, err: err}
 		}
-		rows, err := view.Rows(st.DB(), pricing, scope)
+		rows, more, err := fetchRows(view, st.DB(), pricing, scope, pages)
 		if err != nil {
 			return refreshedMsg{at: now, err: err}
 		}
@@ -431,7 +481,7 @@ func (m Model) refresh(reingest bool) tea.Cmd {
 			return refreshedMsg{at: now, err: err}
 		}
 		return refreshedMsg{
-			at: now, totals: totals, rows: rows, unpriced: len(unpriced),
+			at: now, totals: totals, rows: rows, more: more, unpriced: len(unpriced),
 		}
 	}
 }
@@ -449,4 +499,24 @@ func (m Model) refreshAge() string {
 	default:
 		return fmt.Sprintf("%dh ago", int(age.Hours()))
 	}
+}
+
+func formatTokens(tokens int64) string {
+	switch {
+	case tokens >= 1_000_000_000:
+		return fmt.Sprintf("%.1fB", float64(tokens)/1e9)
+	case tokens >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(tokens)/1e6)
+	case tokens >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(tokens)/1e3)
+	default:
+		return fmt.Sprintf("%d", tokens)
+	}
+}
+
+// Run starts the TUI. The landing view is Projects, per spec §11.2.
+func Run(st *store.Store, pricing *model.Pricing, dbPath string) error {
+	m := New(st, pricing, dbPath, ProjectsView{}, DefaultRegistry())
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	return err
 }

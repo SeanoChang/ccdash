@@ -92,7 +92,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		defer st.Close()
-		if err := tui.Run(st, pricing); err != nil {
+		if err := tui.Run(st, pricing, databasePath(options.dbPath)); err != nil {
 			fmt.Fprintln(stderr, "error:", err)
 			return 1
 		}

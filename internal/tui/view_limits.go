@@ -90,3 +90,54 @@ func (LimitsView) Rows(db *sql.DB, _ *model.Pricing, _ Scope) ([]Row, error) {
 }
 
 func (LimitsView) Drill(Row, Scope) (View, Scope, bool) { return nil, Scope{}, false }
+
+type expectedLimit struct {
+	tool model.Tool
+	kind model.LimitKind
+}
+
+func limitKey(tool model.Tool, kind model.LimitKind, scope string) string {
+	return string(tool) + "\x00" + string(kind) + "\x00" + scope
+}
+
+func limitLabel(kind model.LimitKind, scope string) string {
+	if scope != "" {
+		return scope
+	}
+	switch kind {
+	case model.KindWeeklyAll:
+		return "weekly"
+	case model.KindCodex5h:
+		return "5h"
+	case model.KindCodexWeekly:
+		return "weekly"
+	default:
+		return string(kind)
+	}
+}
+
+// resetIn has no "resets " prefix: the column header already says RESETS.
+func resetIn(value *time.Time) string {
+	if value == nil {
+		return "no reset time"
+	}
+	duration := time.Until(*value)
+	if duration <= 0 {
+		return "resetting"
+	}
+	if duration >= 24*time.Hour {
+		return fmt.Sprintf("%dd %dh", int(duration.Hours())/24, int(duration.Hours())%24)
+	}
+	return fmt.Sprintf("%dh%02dm", int(duration.Hours()), int(duration.Minutes())%60)
+}
+
+func formatAge(age time.Duration) string {
+	switch {
+	case age < time.Minute:
+		return "<1m"
+	case age < time.Hour:
+		return fmt.Sprintf("%dm", int(age.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(age.Hours()))
+	}
+}
