@@ -15,6 +15,9 @@ type AgentBucket struct {
 	Requests int
 	Tokens   int64
 	Cost     float64
+	// Unpriced counts requests in this bucket whose model has no rate. Cost
+	// omits them, so a view must render an em dash rather than $0.00.
+	Unpriced int
 }
 
 type WorkflowBucket struct {
@@ -24,6 +27,9 @@ type WorkflowBucket struct {
 	Tokens   int64
 	Cost     float64
 	Started  time.Time
+	// Unpriced counts requests in this bucket whose model has no rate. Cost
+	// omits them, so a view must render an em dash rather than $0.00.
+	Unpriced int
 }
 
 func recordTokens(row detailRow) int64 {
@@ -55,6 +61,8 @@ func ByAgent(db *sql.DB, pricing *model.Pricing, filter Filter) ([]AgentBucket, 
 		bucket.Tokens += recordTokens(row)
 		if cost, ok := pricing.Cost(row.Record); ok {
 			bucket.Cost += cost
+		} else {
+			bucket.Unpriced++
 		}
 	}
 	result := make([]AgentBucket, 0, len(buckets))
@@ -93,6 +101,8 @@ func ByWorkflow(db *sql.DB, pricing *model.Pricing, filter Filter) ([]WorkflowBu
 		bucket.Tokens += recordTokens(row)
 		if cost, ok := pricing.Cost(row.Record); ok {
 			bucket.Cost += cost
+		} else {
+			bucket.Unpriced++
 		}
 		if row.Agent != "" && !seenAgents[row.Workflow][row.Agent] {
 			seenAgents[row.Workflow][row.Agent] = true

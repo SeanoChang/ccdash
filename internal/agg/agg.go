@@ -145,6 +145,9 @@ type DayBucket struct {
 	Day    time.Time
 	Tokens int64
 	Cost   float64
+	// Unpriced counts requests in this bucket whose model has no rate. Cost
+	// omits them, so a view must render an em dash rather than $0.00.
+	Unpriced int
 }
 
 func dayUTC(t time.Time) time.Time {
@@ -169,6 +172,8 @@ func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, erro
 			row.record.CacheReadTok + row.record.CacheWrite5m + row.record.CacheWrite1h
 		if cost, ok := pricing.Cost(row.record); ok {
 			bucket.Cost += cost
+		} else {
+			bucket.Unpriced++
 		}
 	}
 	result := make([]DayBucket, 0, len(buckets))
@@ -190,6 +195,9 @@ type ModelBucket struct {
 	CacheWrite5m int64   `json:"cache_write_5m_tokens"`
 	CacheWrite1h int64   `json:"cache_write_1h_tokens"`
 	Cost         float64 `json:"cost_at_api_rates"`
+	// Unpriced counts requests in this bucket whose model has no rate. Cost
+	// omits them, so a view must render an em dash rather than $0.00.
+	Unpriced int `json:"unpriced_requests"`
 }
 
 func ByModel(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ModelBucket, error) {
@@ -216,6 +224,8 @@ func ByModel(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ModelBucket, 
 			row.record.CacheReadTok + row.record.CacheWrite5m + row.record.CacheWrite1h
 		if cost, ok := pricing.Cost(row.record); ok {
 			bucket.Cost += cost
+		} else {
+			bucket.Unpriced++
 		}
 	}
 	result := make([]ModelBucket, 0, len(buckets))
@@ -238,6 +248,9 @@ type ProjectBucket struct {
 	Project string
 	Cost    float64
 	Spark   []float64
+	// Unpriced counts requests in this bucket whose model has no rate. Cost
+	// omits them, so a view must render an em dash rather than $0.00.
+	Unpriced int
 }
 
 const sparkPoints = 14
@@ -248,8 +261,9 @@ func ByProject(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ProjectBuck
 		return nil, err
 	}
 	type accumulation struct {
-		cost float64
-		days map[time.Time]float64
+		cost     float64
+		unpriced int
+		days     map[time.Time]float64
 	}
 	buckets := make(map[string]*accumulation)
 	var latestDay time.Time
@@ -266,6 +280,8 @@ func ByProject(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ProjectBuck
 		if cost, ok := pricing.Cost(row.record); ok {
 			bucket.cost += cost
 			bucket.days[day] += cost
+		} else {
+			bucket.unpriced++
 		}
 	}
 	result := make([]ProjectBucket, 0, len(buckets))
@@ -277,7 +293,12 @@ func ByProject(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ProjectBuck
 				spark[i] = bucket.days[start.AddDate(0, 0, i)]
 			}
 		}
-		result = append(result, ProjectBucket{Project: name, Cost: bucket.cost, Spark: spark})
+		result = append(result, ProjectBucket{
+			Project:  name,
+			Cost:     bucket.cost,
+			Spark:    spark,
+			Unpriced: bucket.unpriced,
+		})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].Cost == result[j].Cost {
