@@ -337,8 +337,14 @@ func (m Model) View() string {
 		Requests: fmt.Sprintf("%d", m.totals.Requests),
 		Unpriced: fmt.Sprintf("%d", m.unpriced),
 	}
-	return frame(headerBlock(info, m.width), entry.table.Render(),
-		m.footer(), m.width, m.height)
+	body := entry.table.Render()
+	if renderer, ok := entry.view.(Renderer); ok {
+		if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
+			m.width, bodyHeight(m.height)); err == nil {
+			body = custom
+		}
+	}
+	return frame(headerBlock(info, m.width), body, m.footer(), m.width, m.height)
 }
 
 func (m Model) rangeText() string {

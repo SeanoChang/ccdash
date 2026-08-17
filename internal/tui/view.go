@@ -79,3 +79,10 @@ type Paginator interface {
 	Page(db *sql.DB, pricing *model.Pricing, scope Scope, offset, limit int) (rows []Row, more bool, err error)
 	PageSize() int
 }
+
+// Renderer is implemented by views that paint their own body instead of a
+// table. App checks for it before falling back to Table. Only PulseView
+// implements it.
+type Renderer interface {
+	Body(db *sql.DB, pricing *model.Pricing, scope Scope, width, height int) ([]string, error)
+}
