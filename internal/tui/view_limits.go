@@ -24,20 +24,35 @@ func (LimitsView) Columns() []Column {
 	}
 }
 
-func (LimitsView) Rows(db *sql.DB, _ *model.Pricing, _ Scope) ([]Row, error) {
+// Rows lists one row per limit the scope leaves in view. Only scope.Tool
+// narrows the result: a limit is a standing quota rather than a time series —
+// agg.LatestLimits already returns the newest sample per (tool, kind, scope) —
+// so scope.From/To cannot sensibly select among them and are ignored. The tool
+// filter, though, has to be honored here or the border title's count describes
+// rows the body is not showing, and a pane whose header and body disagree
+// teaches the user to distrust every number on screen.
+func (LimitsView) Rows(db *sql.DB, _ *model.Pricing, scope Scope) ([]Row, error) {
 	states, err := agg.LatestLimits(db)
 	if err != nil {
 		return nil, err
 	}
 	index := make(map[string]agg.LimitState, len(states))
 	for _, state := range states {
+		if !limitInScope(state.Tool, scope) {
+			continue
+		}
 		index[limitKey(state.Tool, state.Kind, state.Scope)] = state
 	}
-	expected := []expectedLimit{
+	expected := make([]expectedLimit, 0, 4)
+	for _, item := range []expectedLimit{
 		{model.ToolClaude, model.KindSession},
 		{model.ToolClaude, model.KindWeeklyAll},
 		{model.ToolCodex, model.KindCodex5h},
 		{model.ToolCodex, model.KindCodexWeekly},
+	} {
+		if limitInScope(item.tool, scope) {
+			expected = append(expected, item)
+		}
 	}
 	rows := make([]Row, 0, len(expected)+len(states))
 	emit := func(state agg.LimitState) {
@@ -94,6 +109,12 @@ func (LimitsView) Drill(Row, Scope) (View, Scope, bool) { return nil, Scope{}, f
 type expectedLimit struct {
 	tool model.Tool
 	kind model.LimitKind
+}
+
+// limitInScope reports whether a limit belonging to tool survives the current
+// filter. An empty scope.Tool keeps every tool, which is the "all" case.
+func limitInScope(tool model.Tool, scope Scope) bool {
+	return scope.Tool == "" || scope.Tool == tool
 }
 
 func limitKey(tool model.Tool, kind model.LimitKind, scope string) string {
