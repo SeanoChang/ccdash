@@ -48,6 +48,10 @@ type Model struct {
 	mode  inputMode
 	input string
 
+	// showHelp replaces the body with the keybinding overlay. Any key dismisses
+	// it, so it is never sticky.
+	showHelp bool
+
 	registry   map[string]func() View
 	commandErr string
 }
@@ -197,6 +201,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// The help overlay is dismissed by any key, and that key is swallowed: the
+	// keystroke that closes the overlay must not also act on the table beneath
+	// it. ctrl+c still quits, per spec §5.5's "any" context.
+	if m.showHelp {
+		if message.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		m.showHelp = false
+		return m, nil
+	}
 	if m.mode != modeNormal {
 		return m.handlePrompt(message)
 	}
@@ -205,7 +219,9 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch message.String() {
-	case "ctrl+c":
+	// q is bound only here, in the normal-mode switch: handlePrompt consumes
+	// every key, so a q typed into a filter or command stays text.
+	case "ctrl+c", "q":
 		return m, tea.Quit
 	case "j", "down":
 		entry.table.Move(1)
@@ -257,6 +273,8 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.mode = modeFilter
 		m.input = ""
+	case "?":
+		m.showHelp = true
 	}
 	return m, nil
 }
@@ -386,11 +404,16 @@ func (m Model) View() string {
 		Requests: fmt.Sprintf("%d", m.totals.Requests),
 		Unpriced: fmt.Sprintf("%d", m.unpriced),
 	}
-	body := entry.table.Render()
-	if renderer, ok := entry.view.(Renderer); ok {
-		if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
-			m.width, bodyHeight(m.height)); err == nil {
-			body = custom
+	var body []string
+	if m.showHelp {
+		body = helpBody(m.width, bodyHeight(m.height))
+	} else {
+		body = entry.table.Render()
+		if renderer, ok := entry.view.(Renderer); ok {
+			if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
+				m.width, bodyHeight(m.height)); err == nil {
+				body = custom
+			}
 		}
 	}
 	return frame(headerBlock(info, m.width), body, m.footer(), m.width, m.height)
@@ -414,6 +437,9 @@ func (m Model) footer() string {
 	}
 	left := m.breadcrumb()
 	right := m.refreshAge() + "   [enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
+	if m.showHelp {
+		right = m.refreshAge() + "   any key dismisses"
+	}
 	if m.commandErr != "" {
 		right = styleWarning.Render(m.commandErr)
 	}

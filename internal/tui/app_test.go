@@ -51,6 +51,48 @@ func key(s string) tea.KeyMsg {
 	panic("unknown key " + s)
 }
 
+// isQuit reports whether cmd is tea.Quit. A tea.Cmd is only comparable by the
+// message it produces, so the command is run.
+func isQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
+}
+
+func TestQQuitsInNormalMode(t *testing.T) {
+	m := newTestModel()
+	_, cmd := m.Update(key("q"))
+	if !isQuit(cmd) {
+		t.Error("q in normal mode must quit")
+	}
+}
+
+func TestCtrlCQuits(t *testing.T) {
+	m := newTestModel()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !isQuit(cmd) {
+		t.Error("ctrl+c must quit")
+	}
+}
+
+func TestQIsTypedIntoAnOpenPrompt(t *testing.T) {
+	for _, open := range []string{"/", ":"} {
+		m := newTestModel()
+		next, _ := m.Update(key(open))
+		m = next.(Model)
+		next, cmd := m.Update(key("q"))
+		m = next.(Model)
+		if isQuit(cmd) {
+			t.Errorf("q must not quit while the %q prompt is open", open)
+		}
+		if m.input != "q" {
+			t.Errorf("after %q then q, input = %q, want \"q\"", open, m.input)
+		}
+	}
+}
+
 func TestDrillPushesAndEscPops(t *testing.T) {
 	m := newTestModel()
 	if len(m.stack) != 1 {
