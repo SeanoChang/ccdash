@@ -22,8 +22,9 @@ func clamp01(value float64) float64 {
 	return value
 }
 
-// Bar renders exactly width cells with eighth-cell precision.
-func Bar(fraction float64, width int) string {
+// BarTrack renders exactly width cells with eighth-cell precision, filling
+// unused cells with track so the full 0-100% range stays visible.
+func BarTrack(fraction float64, width int, track rune) string {
 	if width <= 0 {
 		return ""
 	}
@@ -43,30 +44,37 @@ func Bar(fraction float64, width int) string {
 		if index > 8 {
 			index = 8
 		}
-		out.WriteRune(partials[index])
+		if index == 0 {
+			out.WriteRune(track)
+		} else {
+			out.WriteRune(partials[index])
+		}
 		written++
 	}
 	for ; written < width; written++ {
-		out.WriteByte(' ')
+		out.WriteRune(track)
 	}
 	return out.String()
 }
 
-func Sparkline(values []float64) string {
+// Bar keeps the original space-padded behavior for callers that want a bar
+// with no visible track.
+func Bar(fraction float64, width int) string {
+	return BarTrack(fraction, width, ' ')
+}
+
+// SparklineDomain renders values against an explicit [lo,hi] domain so that
+// sparklines on different rows are comparable. Values outside the domain clamp.
+func SparklineDomain(values []float64, lo, hi float64) string {
 	if len(values) == 0 {
 		return ""
 	}
-	minimum, maximum := values[0], values[0]
-	for _, value := range values[1:] {
-		minimum = math.Min(minimum, value)
-		maximum = math.Max(maximum, value)
-	}
-	span := maximum - minimum
+	span := hi - lo
 	var out strings.Builder
 	for _, value := range values {
 		index := 0
 		if span > 0 {
-			index = int((value - minimum) / span * float64(len(spark)-1))
+			index = int((value - lo) / span * float64(len(spark)-1))
 		}
 		if index < 0 {
 			index = 0
@@ -79,9 +87,44 @@ func Sparkline(values []float64) string {
 	return out.String()
 }
 
-// Braille plots a connected series into a w-by-h cell grid at 2x4 subpixel
-// resolution.
-func Braille(series []float64, width, height int) string {
+// Sparkline normalizes to the series' own range. Prefer SparklineDomain when
+// rendering more than one series that a reader will compare.
+func Sparkline(values []float64) string {
+	if len(values) == 0 {
+		return ""
+	}
+	minimum, maximum := values[0], values[0]
+	for _, value := range values[1:] {
+		minimum = math.Min(minimum, value)
+		maximum = math.Max(maximum, value)
+	}
+	return SparklineDomain(values, minimum, maximum)
+}
+
+// TruncatePath shortens a path to at most width runes by dropping whole
+// leading segments, so that sibling directories stay distinguishable. Only
+// when the final segment alone will not fit does it cut mid-word.
+func TruncatePath(path string, width int) string {
+	if len([]rune(path)) <= width {
+		return path
+	}
+	if width <= 1 {
+		return "…"
+	}
+	segments := strings.Split(path, "/")
+	for i := 1; i < len(segments); i++ {
+		candidate := "…/" + strings.Join(segments[i:], "/")
+		if len([]rune(candidate)) <= width {
+			return candidate
+		}
+	}
+	runes := []rune(path)
+	return "…" + string(runes[len(runes)-(width-1):])
+}
+
+// BrailleDomain plots a connected series into a w-by-h cell grid at 2x4
+// subpixel resolution, against an explicit [lo,hi] value domain.
+func BrailleDomain(series []float64, width, height int, lo, hi float64) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -91,15 +134,13 @@ func Braille(series []float64, width, height int) string {
 		grid[y] = make([]bool, pixelWidth)
 	}
 	if len(series) > 0 {
-		minimum, maximum := series[0], series[0]
-		for _, value := range series[1:] {
-			minimum = math.Min(minimum, value)
-			maximum = math.Max(maximum, value)
-		}
-		span := maximum - minimum
+		span := hi - lo
 		previousY := -1
 		for x := 0; x < pixelWidth; x++ {
 			position := float64(x) * float64(len(series)-1) / float64(pixelWidth-1)
+			if len(series) == 1 {
+				position = 0
+			}
 			left := int(position)
 			right := left + 1
 			if right >= len(series) {
@@ -107,10 +148,11 @@ func Braille(series []float64, width, height int) string {
 			}
 			fraction := position - float64(left)
 			value := series[left]*(1-fraction) + series[right]*fraction
-			normalized := 0.5
+			normalized := 0.0
 			if span > 0 {
-				normalized = (value - minimum) / span
+				normalized = (value - lo) / span
 			}
+			normalized = clamp01(normalized)
 			y := int(math.Round((1 - normalized) * float64(pixelHeight-1)))
 			grid[y][x] = true
 			if previousY >= 0 {
@@ -147,4 +189,15 @@ func Braille(series []float64, width, height int) string {
 		}
 	}
 	return out.String()
+}
+
+// Braille plots against a zero-based domain with 5% headroom, which is what a
+// cost-over-time chart wants: the floor is meaningful and the peak does not
+// touch the top edge.
+func Braille(series []float64, width, height int) string {
+	maximum := 0.0
+	for _, value := range series {
+		maximum = math.Max(maximum, value)
+	}
+	return BrailleDomain(series, width, height, 0, maximum*1.05)
 }
