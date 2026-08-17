@@ -40,6 +40,9 @@ type Model struct {
 
 	mode  inputMode
 	input string
+
+	registry   map[string]func() View
+	commandErr string
 }
 
 type inputMode int
@@ -50,10 +53,12 @@ const (
 	modeFilter
 )
 
-func New(st *store.Store, pricing *model.Pricing, dbPath string, root View) Model {
+func New(st *store.Store, pricing *model.Pricing, dbPath string, root View,
+	registry map[string]func() View) Model {
 	m := Model{
 		st: st, pricing: pricing, dbPath: dbPath,
 		rangeLabel: "all", width: 80, height: 24,
+		registry: registry,
 	}
 	m.stack = []stackEntry{{view: root, scope: m.scope, table: NewTable(root.Columns())}}
 	return m
@@ -114,6 +119,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.mode != modeNormal {
+		return m.handlePrompt(message)
+	}
 	entry := m.current()
 	if entry == nil {
 		return m, nil
@@ -155,6 +163,72 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setRange(30*24*time.Hour, "month")
 	case "a":
 		return m.setRange(0, "all")
+	case ":":
+		m.mode = modeCommand
+		m.input = ""
+		m.commandErr = ""
+	case "/":
+		m.mode = modeFilter
+		m.input = ""
+	}
+	return m, nil
+}
+
+// handlePrompt consumes every key while a prompt is open, so global bindings
+// never fire on characters the user is typing.
+func (m Model) handlePrompt(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch message.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.mode = modeNormal
+		m.input = ""
+		return m, nil
+	case tea.KeyBackspace:
+		if runes := []rune(m.input); len(runes) > 0 {
+			m.input = string(runes[:len(runes)-1])
+		}
+		return m, nil
+	case tea.KeyEnter:
+		return m.submitPrompt()
+	case tea.KeyRunes, tea.KeySpace:
+		// Bubble Tea reports a lone space as KeySpace with Runes == [' '],
+		// so the runes are the whole story; only a synthesised KeySpace
+		// carrying no runes needs one appended.
+		if len(message.Runes) > 0 {
+			m.input += string(message.Runes)
+		} else if message.Type == tea.KeySpace {
+			m.input += " "
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
+	input, mode := m.input, m.mode
+	m.mode, m.input = modeNormal, ""
+	switch mode {
+	case modeFilter:
+		m.current().table.SetFilter(input)
+		return m, nil
+	case modeCommand:
+		if strings.EqualFold(strings.TrimSpace(input), "q") ||
+			strings.EqualFold(strings.TrimSpace(input), "quit") {
+			return m, tea.Quit
+		}
+		view, ok := resolveCommand(input, m.registry)
+		if !ok {
+			m.commandErr = "unknown command: " + input
+			return m, nil
+		}
+		m.commandErr = ""
+		// A command replaces the whole stack: it is a jump, not a drill.
+		m.stack = []stackEntry{{
+			view: view, scope: m.scope, table: NewTable(view.Columns()),
+		}}
+		m.reloadCurrent()
+		return m, nil
 	}
 	return m, nil
 }
@@ -243,8 +317,17 @@ func (m Model) rangeText() string {
 }
 
 func (m Model) footer() string {
+	if m.mode == modeCommand {
+		return padLine(stylePrompt.Render(" :"+m.input+"█"), m.width)
+	}
+	if m.mode == modeFilter {
+		return padLine(stylePrompt.Render(" /"+m.input+"█"), m.width)
+	}
 	left := m.breadcrumb()
 	right := "[enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
+	if m.commandErr != "" {
+		right = styleWarning.Render(m.commandErr)
+	}
 	if m.refreshErr != nil {
 		right = styleDanger.Render("refresh failed: " + m.refreshErr.Error())
 	}

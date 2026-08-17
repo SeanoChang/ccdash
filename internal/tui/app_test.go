@@ -32,7 +32,7 @@ func (f fakeView) Drill(row Row, scope Scope) (View, Scope, bool) {
 }
 
 func newTestModel() Model {
-	m := New(nil, model.DefaultPricing(), "/tmp/usage.db", fakeView{title: "Root"})
+	m := New(nil, model.DefaultPricing(), "/tmp/usage.db", fakeView{title: "Root"}, nil)
 	m.width, m.height = 100, 24
 	m.reloadCurrent()
 	return m
