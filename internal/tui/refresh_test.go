@@ -2,8 +2,11 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestSingleFlightDropsOverlappingTick(t *testing.T) {
@@ -85,5 +88,67 @@ func TestRefreshAgeText(t *testing.T) {
 	m.lastRefresh = time.Time{}
 	if got := m.refreshAge(); got != "never" {
 		t.Errorf("refreshAge with no refresh = %q, want never", got)
+	}
+}
+
+// TestStaleRefreshAgeIsColoured covers spec §4.3: "Refresh age turns amber past
+// 30 seconds and red past 5 minutes, so a wedged ticker is visible rather than
+// silent." The escape sequences have to reach the frame, not just the text.
+func TestStaleRefreshAgeIsColoured(t *testing.T) {
+	saved := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+	defer lipgloss.SetColorProfile(saved)
+
+	m := newTestModel()
+	m.lastRefresh = time.Now().Add(-3 * time.Second)
+	fresh := m.footer()
+	if ansiPattern.MatchString(fresh) {
+		t.Errorf("a fresh age must stay plain: %q", fresh)
+	}
+
+	m.lastRefresh = time.Now().Add(-45 * time.Second)
+	stale := m.footer()
+	if !ansiPattern.MatchString(stale) {
+		t.Errorf("a 45s age must emit colour, got no escapes: %q", stale)
+	}
+	if !strings.Contains(stale, styleWarning.Render("45s ago")) {
+		t.Errorf("a 45s age must be amber: %q", stale)
+	}
+
+	m.lastRefresh = time.Now().Add(-10 * time.Minute)
+	dead := m.footer()
+	if !strings.Contains(dead, styleDanger.Render("10m ago")) {
+		t.Errorf("a 10m age must be red: %q", dead)
+	}
+
+	for _, line := range []string{fresh, stale, dead} {
+		if lipgloss.Width(line) != m.width {
+			t.Errorf("footer width = %d, want %d: %q", lipgloss.Width(line), m.width, line)
+		}
+	}
+}
+
+// TestRefreshErrorKeepsTheAgeVisible covers spec §8: a failed refresh reports
+// itself without hiding how stale the data now is.
+func TestRefreshErrorKeepsTheAgeVisible(t *testing.T) {
+	saved := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(0) // termenv.TrueColor
+	defer lipgloss.SetColorProfile(saved)
+
+	m := newTestModel()
+	m.lastRefresh = time.Now().Add(-45 * time.Second)
+	m.refreshErr = errors.New("database is locked")
+	out := m.footer()
+	if !strings.Contains(out, "45s ago") {
+		t.Errorf("a refresh error must not swallow the age: %q", out)
+	}
+	if !strings.Contains(out, styleDanger.Render("45s ago")) {
+		t.Errorf("the age beside a refresh error must be red: %q", out)
+	}
+	if !strings.Contains(out, "database is locked") {
+		t.Errorf("the error itself must still be reported: %q", out)
+	}
+	if lipgloss.Width(out) != m.width {
+		t.Errorf("footer width = %d, want %d: %q", lipgloss.Width(out), m.width, out)
 	}
 }

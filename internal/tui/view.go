@@ -31,6 +31,16 @@ const (
 	CellSparkline
 )
 
+// Unit is the quantity a column measures. It is only consulted when a value has
+// to be printed outside a cell — today, the shared maximum in a sparkline
+// column's header — so UnitNumber is a safe default for every other column.
+type Unit int
+
+const (
+	UnitNumber Unit = iota
+	UnitMoney
+)
+
 // Column describes one column of a resource table.
 type Column struct {
 	Title string
@@ -38,6 +48,7 @@ type Column struct {
 	Width int // 0 means flexible: share the remaining width
 	Sort  SortKind
 	Kind  CellKind
+	Unit  Unit
 }
 
 // Cell is one table cell. Text is used for CellText and CellNumber, Value for

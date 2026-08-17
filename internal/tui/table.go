@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -111,6 +113,35 @@ func sparkDomain(rows []Row, index int) float64 {
 		}
 	}
 	return maximum
+}
+
+// sparkHeader labels a sparkline column's header with the shared domain, so the
+// glyph heights have a readable magnitude (spec §7.2). Title and label together
+// when they fit; the label alone when only one of the two does, because the
+// magnitude is the part the glyphs cannot convey on their own. A label that will
+// not fit whole is dropped rather than cut, since a truncated number misstates
+// the very magnitude it is there to report, and a zero domain is left unlabelled
+// because "$0.00" reads as free rather than as absent.
+func sparkHeader(title string, domain float64, unit Unit, width int) string {
+	if domain <= 0 {
+		return title
+	}
+	label := formatDomain(domain, unit)
+	if full := title + " " + label; lipgloss.Width(full) <= width {
+		return full
+	}
+	if lipgloss.Width(label) <= width {
+		return label
+	}
+	return title
+}
+
+// formatDomain prints a column's shared maximum in that column's unit.
+func formatDomain(value float64, unit Unit) string {
+	if unit == UnitMoney {
+		return fmt.Sprintf("$%.2f", value)
+	}
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 // truncateDisplay cuts text to at most width display cells, marking the cut.
@@ -408,6 +439,9 @@ func (t *Table) Render() []string {
 				marker = "↓"
 			}
 			title = truncateDisplay(title+marker, widths[i])
+		}
+		if column.Kind == CellSparkline {
+			title = sparkHeader(title, domains[i], column.Unit, widths[i])
 		}
 		header = append(header, formatCell(Cell{Text: title},
 			Column{Align: column.Align, Kind: CellText}, widths[i], 0))

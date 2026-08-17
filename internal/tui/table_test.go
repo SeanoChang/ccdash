@@ -268,3 +268,64 @@ func TestViewportFollowsSelection(t *testing.T) {
 		t.Error("AtBottom should report true at the end")
 	}
 }
+
+// sparkTable builds a two-column table whose second column is a sparkline of
+// costs, at a chosen sparkline column width.
+func sparkTable(trendWidth int, series []float64) *Table {
+	table := NewTable([]Column{
+		{Title: "NAME", Sort: SortString, Kind: CellText},
+		{Title: "TREND", Width: trendWidth, Sort: SortNumeric, Kind: CellSparkline,
+			Unit: UnitMoney},
+	})
+	table.SetSize(40, 4)
+	table.SetRows([]Row{{Key: "a", Cells: []Cell{{Text: "a"}, {Series: series}}}})
+	return table
+}
+
+// TestSparklineHeaderLabelsSharedDomain covers spec §7.2: "the column header is
+// labelled with the shared max", so glyph heights have a readable magnitude.
+func TestSparklineHeaderLabelsSharedDomain(t *testing.T) {
+	header := sparkTable(14, []float64{1, 40, 141.02}).Render()[0]
+	if !strings.Contains(header, "$141.02") {
+		t.Errorf("sparkline header must carry the shared max: %q", header)
+	}
+	if !strings.Contains(header, "TREND") {
+		t.Errorf("a wide enough sparkline header keeps its title: %q", header)
+	}
+	if lipgloss.Width(header) != 40 {
+		t.Errorf("header width = %d, want 40", lipgloss.Width(header))
+	}
+}
+
+// A domain label must never displace the row's own data: the label lives in the
+// header only, and the shared normalization of the body is unchanged.
+func TestSparklineHeaderTruncatesGracefully(t *testing.T) {
+	narrow := sparkTable(8, []float64{1, 40, 141.02}).Render()[0]
+	if !strings.Contains(narrow, "$141.02") {
+		t.Errorf("when only one of the two fits, the magnitude is what matters: %q", narrow)
+	}
+	tiny := sparkTable(5, []float64{1, 40, 141.02}).Render()[0]
+	if strings.Contains(tiny, "$14") && !strings.Contains(tiny, "$141.02") {
+		t.Errorf("a cut-off number misstates the magnitude; keep the title instead: %q", tiny)
+	}
+	if !strings.Contains(tiny, "TREND") {
+		t.Errorf("a column too narrow for the max still names itself: %q", tiny)
+	}
+	for _, header := range []string{narrow, tiny} {
+		if lipgloss.Width(header) != 40 {
+			t.Errorf("header width = %d, want 40: %q", lipgloss.Width(header), header)
+		}
+	}
+}
+
+// An all-zero series has no magnitude to report. "$0.00" would read as free
+// rather than as absent, so the header stays bare.
+func TestSparklineHeaderOmitsAZeroDomain(t *testing.T) {
+	header := sparkTable(14, []float64{0, 0, 0}).Render()[0]
+	if strings.Contains(header, "$0.00") {
+		t.Errorf("a zero domain must not be labelled $0.00: %q", header)
+	}
+	if !strings.Contains(header, "TREND") {
+		t.Errorf("header lost its title: %q", header)
+	}
+}

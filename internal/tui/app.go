@@ -453,15 +453,19 @@ func (m Model) footer() string {
 		return padLine(stylePrompt.Render(" /"+m.input+"█"), m.width)
 	}
 	left := m.breadcrumb()
-	right := m.refreshAge() + "   [enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
+	right := m.styledRefreshAge() + "   [enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
 	if m.showHelp {
-		right = m.refreshAge() + "   any key dismisses"
+		right = m.styledRefreshAge() + "   any key dismisses"
 	}
 	if m.commandErr != "" {
-		right = styleWarning.Render(m.commandErr)
+		right = m.styledRefreshAge() + "   " + styleWarning.Render(m.commandErr)
 	}
+	// A failed refresh keeps the age beside it, and reddens it: the error says
+	// what broke, the age says how stale the data on screen has become. Losing
+	// the age here would hide exactly the thing the error makes urgent.
 	if m.refreshErr != nil {
-		right = styleDanger.Render("refresh failed: " + m.refreshErr.Error())
+		right = styleDanger.Render(m.refreshAge()) + "   " +
+			styleDanger.Render("refresh failed: "+m.refreshErr.Error())
 	}
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 2
 	if gap < 1 {
@@ -526,6 +530,32 @@ func (m Model) refresh(reingest bool) tea.Cmd {
 		return refreshedMsg{
 			at: now, totals: totals, rows: rows, more: more, unpriced: len(unpriced),
 		}
+	}
+}
+
+// Past these thresholds the age is no longer background information: it is the
+// only visible sign that the 2s ticker has stopped landing (spec §4.3).
+const (
+	refreshStale = 30 * time.Second
+	refreshDead  = 5 * time.Minute
+)
+
+// styledRefreshAge colours the age amber past 30s and red past 5 minutes, so a
+// wedged ticker is visible rather than silent. A refresh that has never landed
+// is amber too — it is not a healthy state, but there is no elapsed time yet to
+// call it dead.
+func (m Model) styledRefreshAge() string {
+	text := m.refreshAge()
+	if m.lastRefresh.IsZero() {
+		return styleWarning.Render(text)
+	}
+	switch age := time.Since(m.lastRefresh); {
+	case age > refreshDead:
+		return styleDanger.Render(text)
+	case age > refreshStale:
+		return styleWarning.Render(text)
+	default:
+		return text
 	}
 }
 

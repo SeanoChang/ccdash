@@ -28,7 +28,8 @@ func (ProjectsView) Columns() []Column {
 		{Title: "NAME", Sort: SortString, Kind: CellText},
 		{Title: "COST", Width: 12, Align: AlignRight, Sort: SortNumeric, Kind: CellNumber},
 		{Title: "SHARE", Width: 12, Sort: SortNumeric, Kind: CellBar},
-		{Title: "TREND", Width: 14, Sort: SortNumeric, Kind: CellSparkline},
+		// The series is cost per day, so the header's shared max is money.
+		{Title: "TREND", Width: 14, Sort: SortNumeric, Kind: CellSparkline, Unit: UnitMoney},
 	}
 }
 
