@@ -23,7 +23,7 @@ var (
 	headingStyle = lipgloss.NewStyle().Bold(true)
 )
 
-type Model struct {
+type legacyModel struct {
 	st         *store.Store
 	pricing    *model.Pricing
 	filter     agg.Filter
@@ -51,13 +51,13 @@ type loadedMsg struct {
 	err      error
 }
 
-func New(st *store.Store, pricing *model.Pricing) Model {
-	return Model{st: st, pricing: pricing, rangeLabel: "all"}
+func newLegacy(st *store.Store, pricing *model.Pricing) legacyModel {
+	return legacyModel{st: st, pricing: pricing, rangeLabel: "all"}
 }
 
-func (m Model) Init() tea.Cmd { return m.load(false) }
+func (m legacyModel) Init() tea.Cmd { return m.load(false) }
 
-func (m Model) load(reingest bool) tea.Cmd {
+func (m legacyModel) load(reingest bool) tea.Cmd {
 	st, pricing, filter := m.st, m.pricing, m.filter
 	return func() tea.Msg {
 		if st == nil {
@@ -98,7 +98,7 @@ func (m Model) load(reingest bool) tea.Cmd {
 	}
 }
 
-func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+func (m legacyModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
@@ -137,14 +137,14 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) setRange(duration time.Duration, label string) {
+func (m *legacyModel) setRange(duration time.Duration, label string) {
 	now := time.Now()
 	m.filter.From = now.Add(-duration)
 	m.filter.To = time.Time{}
 	m.rangeLabel = label
 }
 
-func (m Model) View() string {
+func (m legacyModel) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("error: %v\n\npress q to quit\n", m.err)
 	}
@@ -195,7 +195,7 @@ func (m Model) View() string {
 	return out.String()
 }
 
-func (m Model) usagePanels(width int) string {
+func (m legacyModel) usagePanels(width int) string {
 	models := m.modelPanel()
 	if width >= 100 && len(m.days) > 0 && models != "" {
 		panelWidth := width/2 - 2
@@ -207,7 +207,7 @@ func (m Model) usagePanels(width int) string {
 	return m.chartPanel(width) + models
 }
 
-func (m Model) chartPanel(width int) string {
+func (m legacyModel) chartPanel(width int) string {
 	if len(m.days) == 0 {
 		return ""
 	}
@@ -222,7 +222,7 @@ func (m Model) chartPanel(width int) string {
 	return dimStyle.Render("\ncost / day\n") + accentStyle.Render(render.Braille(values, chartWidth, 4)) + "\n"
 }
 
-func (m Model) modelPanel() string {
+func (m legacyModel) modelPanel() string {
 	if len(m.models) == 0 {
 		return ""
 	}
@@ -238,7 +238,7 @@ func (m Model) modelPanel() string {
 	return out.String()
 }
 
-func (m Model) projectPanel() string {
+func (m legacyModel) projectPanel() string {
 	if len(m.projects) == 0 {
 		return ""
 	}
@@ -265,7 +265,7 @@ type expectedLimit struct {
 	kind model.LimitKind
 }
 
-func (m Model) limitsPanel(width int) string {
+func (m legacyModel) limitsPanel(width int) string {
 	var out strings.Builder
 	out.WriteString(dimStyle.Render("\nlimits\n"))
 	states := make(map[string]agg.LimitState)
@@ -406,6 +406,6 @@ func minimum(a, b int) int {
 }
 
 func Run(st *store.Store, pricing *model.Pricing) error {
-	_, err := tea.NewProgram(New(st, pricing), tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(newLegacy(st, pricing), tea.WithAltScreen()).Run()
 	return err
 }
