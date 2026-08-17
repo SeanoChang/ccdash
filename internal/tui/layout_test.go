@@ -30,9 +30,10 @@ func TestFrameIsExactlyViewportSized(t *testing.T) {
 		}
 		header := headerBlock(info, size.w)
 		table := NewTable([]Column{{Title: "NAME"}, {Title: "COST", Align: AlignRight}})
-		table.SetSize(size.w, bodyHeight(size.h))
+		table.SetSize(bodyWidth(size.w), bodyHeight(size.h))
 		table.SetRows([]Row{textRow("a", "x", "$1")})
-		out := frame(header, table.Render(), "<projects>", size.w, size.h)
+		panel := bodyPanel("Projects(all)[1]", table.Render(), size.w)
+		out := frame(header, panel, "<projects>", size.w, size.h)
 		assertExactFrame(t, out, size.w, size.h)
 	}
 }
@@ -40,16 +41,18 @@ func TestFrameIsExactlyViewportSized(t *testing.T) {
 func TestFrameFillsEvenWithNoRows(t *testing.T) {
 	header := headerBlock(headerInfo{Range: "all"}, 100)
 	table := NewTable([]Column{{Title: "NAME"}})
-	table.SetSize(100, bodyHeight(30))
+	table.SetSize(bodyWidth(100), bodyHeight(30))
 	table.SetRows(nil)
-	out := frame(header, table.Render(), "<projects>", 100, 30)
+	panel := bodyPanel("Projects(all)[0]", table.Render(), 100)
+	out := frame(header, panel, "<projects>", 100, 30)
 	assertExactFrame(t, out, 100, 30)
 }
 
 func TestBodyHeightLeavesRoomForChrome(t *testing.T) {
-	// 4 header rows + 1 footer = 5 lines of chrome.
-	if got := bodyHeight(30); got != 25 {
-		t.Errorf("bodyHeight(30) = %d, want 25", got)
+	// 4 header rows + 2 body border rows + 1 footer = 7 lines of chrome, so the
+	// viewport is spec §4's h - 7.
+	if got := bodyHeight(30); got != 23 {
+		t.Errorf("bodyHeight(30) = %d, want 23", got)
 	}
 	if got := bodyHeight(6); got < 1 {
 		t.Errorf("bodyHeight(6) = %d, must stay at least 1", got)

@@ -189,6 +189,11 @@ func (t *Table) SetSize(width, height int) {
 func (t *Table) TotalCount() int   { return len(t.all) }
 func (t *Table) VisibleCount() int { return len(t.visible) }
 
+// Filter returns the active filter expression, empty when none is set. The body
+// title needs to distinguish "no filter" from "a filter that happens to match
+// every row".
+func (t *Table) Filter() string { return t.filter }
+
 // SetRows replaces the data, preserving the selected row by Key. When the key
 // is gone the selection clamps to the nearest valid index.
 func (t *Table) SetRows(rows []Row) {

@@ -122,7 +122,7 @@ func (m *Model) reloadCurrent() {
 	if entry == nil {
 		return
 	}
-	entry.table.SetSize(m.width, bodyHeight(m.height))
+	entry.table.SetSize(bodyWidth(m.width), bodyHeight(m.height))
 	rows, more, err := fetchRows(entry.view, m.db(), m.pricing, entry.scope, entry.pages)
 	if err != nil {
 		m.refreshErr = err
@@ -165,7 +165,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
 		for i := range m.stack {
-			m.stack[i].table.SetSize(m.width, bodyHeight(m.height))
+			m.stack[i].table.SetSize(bodyWidth(m.width), bodyHeight(m.height))
 		}
 		return m, nil
 	case tickMsg:
@@ -404,19 +404,35 @@ func (m Model) View() string {
 		Requests: fmt.Sprintf("%d", m.totals.Requests),
 		Unpriced: fmt.Sprintf("%d", m.unpriced),
 	}
+	interior, height := bodyWidth(m.width), bodyHeight(m.height)
 	var body []string
+	// The overlay is not a resource, so it borrows the border but not the
+	// resource title — a row count there would be a count of nothing.
+	title := "Help"
 	if m.showHelp {
-		body = helpBody(m.width, bodyHeight(m.height))
+		body = helpBody(interior, height)
 	} else {
 		body = entry.table.Render()
 		if renderer, ok := entry.view.(Renderer); ok {
 			if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
-				m.width, bodyHeight(m.height)); err == nil {
+				interior, height); err == nil {
 				body = custom
 			}
 		}
+		title = m.bodyTitle(entry)
 	}
-	return frame(headerBlock(info, m.width), body, m.footer(), m.width, m.height)
+	return frame(headerBlock(info, m.width), bodyPanel(title, body, m.width),
+		m.footer(), m.width, m.height)
+}
+
+// bodyTitle builds the border title for one stack level. The table already
+// holds both counts the title needs: everything loaded, and everything the
+// filter left visible.
+func (m Model) bodyTitle(entry *stackEntry) string {
+	_, rendered := entry.view.(Renderer)
+	return bodyTitle(entry.view.Title(), scopeLabel(entry.scope),
+		entry.table.VisibleCount(), entry.table.TotalCount(),
+		entry.table.Filter() != "", entry.more, rendered)
 }
 
 func (m Model) rangeText() string {
