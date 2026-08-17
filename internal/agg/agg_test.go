@@ -1,6 +1,7 @@
 package agg
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
@@ -102,4 +103,108 @@ func TestLatestLimitsReturnsNewestPerKind(t *testing.T) {
 	if len(states) != 1 || states[0].Percent != 20 || states[0].Age < 50*time.Minute {
 		t.Fatalf("states = %+v", states)
 	}
+}
+
+func TestFilterNarrowsBySessionAgentWorkflow(t *testing.T) {
+	db := seedDetail(t)
+	pricing := model.DefaultPricing()
+
+	all, err := Totals(db, pricing, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Requests != 4 {
+		t.Fatalf("seed should have 4 requests, got %d", all.Requests)
+	}
+
+	bySession, err := Totals(db, pricing, Filter{Session: "s1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bySession.Requests != 2 {
+		t.Errorf("session s1 = %d requests, want 2", bySession.Requests)
+	}
+
+	byAgent, err := Totals(db, pricing, Filter{Agent: "agent-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byAgent.Requests != 1 {
+		t.Errorf("agent-a = %d requests, want 1", byAgent.Requests)
+	}
+
+	byWorkflow, err := Totals(db, pricing, Filter{Workflow: "wf-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byWorkflow.Requests != 1 {
+		t.Errorf("wf-1 = %d requests, want 1", byWorkflow.Requests)
+	}
+}
+
+func TestScanDetailReturnsIdentityColumns(t *testing.T) {
+	db := seedDetail(t)
+	rows, err := scanDetail(db, Filter{Session: "s1"}, "ts ASC", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	if rows[0].ID == "" {
+		t.Error("detail scan must select the request id")
+	}
+	if rows[0].Session != "s1" {
+		t.Errorf("Session = %q, want s1", rows[0].Session)
+	}
+	if rows[0].Tool == "" {
+		t.Error("detail scan must select the tool")
+	}
+	if !rows[0].TS.Before(rows[1].TS) {
+		t.Error("ts ASC order not honored")
+	}
+}
+
+func TestScanDetailPaginates(t *testing.T) {
+	db := seedDetail(t)
+	first, err := scanDetail(db, Filter{}, "ts ASC", 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := scanDetail(db, Filter{}, "ts ASC", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 2 || len(second) != 2 {
+		t.Fatalf("page sizes = %d/%d, want 2/2", len(first), len(second))
+	}
+	if first[0].ID == second[0].ID {
+		t.Error("pages overlap; offset is not applied")
+	}
+}
+
+// seedDetail builds a store with four requests spanning two sessions, one
+// subagent and one workflow.
+func seedDetail(t *testing.T) *sql.DB {
+	t.Helper()
+	s, err := store.Open(t.TempDir() + "/usage.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	recs := []model.Record{
+		{ID: "r1", Tool: model.ToolClaude, TS: time.Unix(1000, 0), Model: "claude-opus-5",
+			Project: "/p/a", Session: "s1", OutputTok: 10},
+		{ID: "r2", Tool: model.ToolClaude, TS: time.Unix(2000, 0), Model: "claude-opus-5",
+			Project: "/p/a", Session: "s1", Agent: "agent-a", Workflow: "wf-1",
+			Depth: 1, OutputTok: 20},
+		{ID: "r3", Tool: model.ToolClaude, TS: time.Unix(3000, 0), Model: "claude-sonnet-5",
+			Project: "/p/b", Session: "s2", OutputTok: 30},
+		{ID: "r4", Tool: model.ToolCodex, TS: time.Unix(4000, 0), Model: "gpt-5.6-luna",
+			Project: "/p/b", Session: "s2", OutputTok: 40},
+	}
+	if _, err := s.UpsertRecords(recs); err != nil {
+		t.Fatal(err)
+	}
+	return s.DB()
 }

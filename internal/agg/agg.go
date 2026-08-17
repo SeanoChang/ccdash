@@ -14,11 +14,14 @@ type Filter struct {
 	Tool     model.Tool
 	Project  string
 	Model    string
+	Session  string
+	Agent    string
+	Workflow string
 }
 
 func (f Filter) where() (string, []any) {
-	conditions := make([]string, 0, 5)
-	args := make([]any, 0, 5)
+	conditions := make([]string, 0, 8)
+	args := make([]any, 0, 8)
 	if !f.From.IsZero() {
 		conditions = append(conditions, "ts >= ?")
 		args = append(args, f.From.Unix())
@@ -38,6 +41,18 @@ func (f Filter) where() (string, []any) {
 	if f.Model != "" {
 		conditions = append(conditions, "model = ?")
 		args = append(args, model.NormalizeModel(f.Model))
+	}
+	if f.Session != "" {
+		conditions = append(conditions, "session = ?")
+		args = append(args, f.Session)
+	}
+	if f.Agent != "" {
+		conditions = append(conditions, "agent = ?")
+		args = append(args, f.Agent)
+	}
+	if f.Workflow != "" {
+		conditions = append(conditions, "workflow = ?")
+		args = append(args, f.Workflow)
 	}
 	if len(conditions) == 0 {
 		return "", nil
@@ -322,6 +337,71 @@ func LatestLimits(db *sql.DB) ([]LimitState, error) {
 			age = 0
 		}
 		result = append(result, LimitState{LimitSample: sample, Age: age})
+	}
+	return result, rows.Err()
+}
+
+const detailColumns = `id,tool,model,project,session,agent,workflow,depth,ts,` +
+	`in_tok,out_tok,think_tok,cache_read,cache_w5m,cache_w1h,anomaly`
+
+// detailRow carries the identity columns that the aggregate scanners omit.
+type detailRow struct {
+	model.Record
+	ID       string
+	Tool     model.Tool
+	Session  string
+	Workflow string
+	Depth    int
+	Anomaly  bool
+}
+
+// scanDetail reads full request rows. order must be a trusted literal such as
+// "ts DESC"; it is never built from user input. limit <= 0 means no limit.
+func scanDetail(db *sql.DB, filter Filter, order string, limit, offset int) ([]detailRow, error) {
+	where, args := filter.where()
+	query := `SELECT ` + detailColumns + ` FROM request` + where
+	if order != "" {
+		query += ` ORDER BY ` + order
+	}
+	if limit > 0 {
+		query += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []detailRow
+	for rows.Next() {
+		var (
+			row                               detailRow
+			tool                              string
+			project, session, agent, workflow sql.NullString
+			ts                                int64
+			anomaly                           int
+		)
+		if err := rows.Scan(&row.ID, &tool, &row.Model, &project, &session,
+			&agent, &workflow, &row.Depth, &ts,
+			&row.InputTok, &row.OutputTok, &row.ThinkingTok,
+			&row.CacheReadTok, &row.CacheWrite5m, &row.CacheWrite1h,
+			&anomaly); err != nil {
+			return nil, err
+		}
+		row.Tool = model.Tool(tool)
+		row.Record.Tool = row.Tool
+		row.Record.TS = time.Unix(ts, 0).UTC()
+		row.TS = row.Record.TS
+		row.Project = project.String
+		row.Record.Project = project.String
+		row.Session = session.String
+		row.Record.Session = session.String
+		row.Agent = agent.String
+		row.Record.Agent = agent.String
+		row.Workflow = workflow.String
+		row.Record.Workflow = workflow.String
+		row.Anomaly = anomaly == 1
+		result = append(result, row)
 	}
 	return result, rows.Err()
 }
