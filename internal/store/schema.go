@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS request (
 CREATE INDEX IF NOT EXISTS request_ts ON request(ts);
 CREATE INDEX IF NOT EXISTS request_project ON request(project, ts);
 CREATE INDEX IF NOT EXISTS request_model ON request(model, ts);
+CREATE INDEX IF NOT EXISTS request_session  ON request(session, ts);
+CREATE INDEX IF NOT EXISTS request_agent    ON request(agent, ts);
+CREATE INDEX IF NOT EXISTS request_workflow ON request(workflow, ts);
 
 -- This table is deliberately not foreign-keyed to request. Source transcripts
 -- are pruned, while archived request rows must survive indefinitely.

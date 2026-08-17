@@ -179,3 +179,29 @@ func TestOpenMigratesLegacyLimitSamples(t *testing.T) {
 		t.Fatalf("last_seen = %d, want observed_at 1234", lastSeen)
 	}
 }
+
+func TestDrillDownIndexesExist(t *testing.T) {
+	s := openTmp(t)
+	rows, err := s.DB().Query(
+		`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='request'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	found := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		found[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"request_session", "request_agent", "request_workflow"} {
+		if !found[want] {
+			t.Errorf("index %q missing; drill-down queries will table-scan", want)
+		}
+	}
+}
