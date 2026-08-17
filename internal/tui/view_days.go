@@ -44,7 +44,7 @@ func (DaysView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Row, er
 			Cells: []Cell{
 				{Text: bucket.Day.Format("2006-01-02"), Value: float64(bucket.Day.Unix())},
 				{Text: formatTokens(bucket.Tokens), Value: float64(bucket.Tokens)},
-				{Text: money(bucket.Cost, true), Value: bucket.Cost},
+				{Text: money(bucket.Cost, bucket.Unpriced == 0), Value: bucket.Cost},
 				{Value: share},
 			},
 		})

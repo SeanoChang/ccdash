@@ -53,7 +53,7 @@ func (ProjectsView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Row
 			Key: bucket.Project,
 			Cells: []Cell{
 				{Text: render.TruncatePath(bucket.Project, 40)},
-				{Text: money(bucket.Cost, true), Value: bucket.Cost},
+				{Text: money(bucket.Cost, bucket.Unpriced == 0), Value: bucket.Cost},
 				{Value: share},
 				{Series: bucket.Spark, Value: bucket.Cost},
 			},

@@ -28,9 +28,11 @@ func (ModelsView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Row, 
 	}
 	rows := make([]Row, 0, len(buckets))
 	for _, bucket := range buckets {
-		// A model with tokens but zero cost has no rate: show an em dash
-		// rather than $0.00, which would read as free rather than unknown.
-		priced := bucket.Cost > 0
+		// Any request the rate table could not price leaves Cost short of the
+		// truth, so show an em dash rather than $0.00, which would read as free
+		// rather than unknown. A priced model that genuinely cost nothing still
+		// prints $0.00 — that figure is known.
+		priced := bucket.Unpriced == 0
 		rows = append(rows, Row{
 			Key: bucket.Model,
 			Cells: []Cell{

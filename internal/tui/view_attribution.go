@@ -37,7 +37,7 @@ func (AgentsView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Row, 
 				{Text: count(bucket.Depth), Value: float64(bucket.Depth)},
 				{Text: count(bucket.Requests), Value: float64(bucket.Requests)},
 				{Text: formatTokens(bucket.Tokens), Value: float64(bucket.Tokens)},
-				{Text: money(bucket.Cost, true), Value: bucket.Cost},
+				{Text: money(bucket.Cost, bucket.Unpriced == 0), Value: bucket.Cost},
 			},
 		})
 	}
@@ -80,7 +80,7 @@ func (WorkflowsView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Ro
 				{Text: formatTokens(bucket.Tokens), Value: float64(bucket.Tokens)},
 				{Text: bucket.Started.Format("2006-01-02 15:04"),
 					Value: float64(bucket.Started.Unix())},
-				{Text: money(bucket.Cost, true), Value: bucket.Cost},
+				{Text: money(bucket.Cost, bucket.Unpriced == 0), Value: bucket.Cost},
 			},
 		})
 	}
