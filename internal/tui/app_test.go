@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -171,13 +172,13 @@ func TestToolAndRangeKeysSetScope(t *testing.T) {
 	}
 	next, _ = m.Update(key("w"))
 	m = next.(Model)
-	if m.rangeLabel != "week" {
-		t.Errorf("range = %q, want week", m.rangeLabel)
+	if got := m.timeRange.label(); got != "last 7d" {
+		t.Errorf("range = %q, want last 7d", got)
 	}
 	next, _ = m.Update(key("a"))
 	m = next.(Model)
-	if m.rangeLabel != "all" || !m.scope.From.IsZero() {
-		t.Errorf("range 'a' must clear the window, got %q", m.rangeLabel)
+	if got := m.timeRange.label(); got != "all" || !m.scope.From.IsZero() {
+		t.Errorf("range 'a' must clear the window, got %q", got)
 	}
 }
 
@@ -200,5 +201,69 @@ func TestCostIsLabelledAtAPIRates(t *testing.T) {
 	}
 	if !strings.Contains(out, "at API rates") {
 		t.Error(`the header must label cost "at API rates"`)
+	}
+}
+
+// TestRollingWindowFollowsTheClock is the regression test for a window that
+// froze at the keystroke that chose it. Pressing "d" then leaving ccdash open
+// for six hours showed a 30-hour window still labelled "last 24h".
+func TestRollingWindowFollowsTheClock(t *testing.T) {
+	clock := time.Date(2026, 8, 18, 9, 0, 0, 0, time.Local)
+	m := newTestModel()
+	m.now = func() time.Time { return clock }
+
+	next, _ := m.Update(key("d"))
+	m = next.(Model)
+	first := m.scope.From
+
+	clock = clock.Add(6 * time.Hour)
+	m.resolveScope()
+
+	if !m.scope.From.After(first) {
+		t.Errorf("From = %v after six hours, want later than %v",
+			m.scope.From, first)
+	}
+	if got := m.scope.To.Sub(m.scope.From); got != 24*time.Hour {
+		t.Errorf("window spans %v, want 24h — a rolling window keeps its "+
+			"width as it follows the clock", got)
+	}
+}
+
+// TestResolveScopeReachesEveryStackLevel keeps a drilled view consistent with
+// the header rather than holding the bounds it was pushed with.
+func TestResolveScopeReachesEveryStackLevel(t *testing.T) {
+	clock := time.Date(2026, 8, 18, 9, 0, 0, 0, time.Local)
+	m := newTestModel()
+	m.now = func() time.Time { return clock }
+
+	next, _ := m.Update(key("enter"))
+	m = next.(Model)
+	if len(m.stack) != 2 {
+		t.Fatalf("stack depth = %d, want 2", len(m.stack))
+	}
+
+	next, _ = m.Update(key("w"))
+	m = next.(Model)
+	for i, entry := range m.stack {
+		if !entry.scope.From.Equal(m.scope.From) {
+			t.Errorf("stack[%d].From = %v, want %v",
+				i, entry.scope.From, m.scope.From)
+		}
+	}
+}
+
+// TestRangeAllClearsBothBounds guards the one kind with no bounds at all.
+func TestRangeAllClearsBothBounds(t *testing.T) {
+	m := newTestModel()
+	m.now = func() time.Time { return time.Date(2026, 8, 18, 9, 0, 0, 0, time.Local) }
+
+	next, _ := m.Update(key("w"))
+	m = next.(Model)
+	next, _ = m.Update(key("a"))
+	m = next.(Model)
+
+	if !m.scope.From.IsZero() || !m.scope.To.IsZero() {
+		t.Errorf("all-time bounds = %v..%v, want both zero",
+			m.scope.From, m.scope.To)
 	}
 }

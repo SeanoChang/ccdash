@@ -36,7 +36,11 @@ type Model struct {
 	scope Scope // global filter; drill-down narrowing is layered on top
 
 	width, height int
-	rangeLabel    string
+
+	timeRange timeRange
+	// now is the clock the window resolves against. Tests replace it; nothing
+	// else should read time.Now for range purposes.
+	now func() time.Time
 
 	totals   agg.TotalsResult
 	unpriced int
@@ -65,7 +69,9 @@ func New(st *store.Store, pricing *model.Pricing, dbPath string, root View,
 	registry map[string]func() View) Model {
 	m := Model{
 		st: st, pricing: pricing, dbPath: dbPath,
-		rangeLabel: "all", width: 80, height: 24,
+		timeRange: timeRange{kind: rangeAll},
+		now:       time.Now,
+		width:     80, height: 24,
 		registry: registry,
 	}
 	m.stack = []stackEntry{newEntry(root, m.scope)}
@@ -184,6 +190,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.scheduleTick()
 		}
 		m.inFlight = true
+		m.resolveScope()
 		return m, m.refresh(true)
 	case refreshedMsg:
 		m.inFlight = false
@@ -252,13 +259,13 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		return m.setTool(model.ToolCodex)
 	case "d":
-		return m.setRange(24*time.Hour, "day")
+		return m.setRange(timeRange{kind: rangeRolling, span: 24 * time.Hour})
 	case "w":
-		return m.setRange(7*24*time.Hour, "week")
+		return m.setRange(timeRange{kind: rangeRolling, span: 7 * 24 * time.Hour})
 	case "m":
-		return m.setRange(30*24*time.Hour, "month")
+		return m.setRange(timeRange{kind: rangeRolling, span: 30 * 24 * time.Hour})
 	case "a":
-		return m.setRange(0, "all")
+		return m.setRange(timeRange{kind: rangeAll})
 	case "r":
 		if m.inFlight {
 			return m, nil
@@ -398,24 +405,35 @@ func (m Model) setTool(tool model.Tool) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) setRange(window time.Duration, label string) (tea.Model, tea.Cmd) {
-	m.rangeLabel = label
-	if window == 0 {
-		m.scope.From = time.Time{}
-	} else {
-		m.scope.From = time.Now().Add(-window)
+// setRange records the window the user asked for. The bounds are not stored:
+// resolveScope derives them from the clock, so a rolling window keeps moving.
+func (m Model) setRange(rng timeRange) (tea.Model, tea.Cmd) {
+	m.timeRange = rng
+	// A narrower window can only shrink the result set, so any depth the user
+	// paged into is stale.
+	for i := range m.stack {
+		m.stack[i].pages = 1
 	}
-	m.scope.To = time.Time{}
 	m.applyScope()
 	return m, nil
 }
 
-func (m *Model) applyScope() {
+// resolveScope recomputes the window's bounds from the clock and pushes the
+// whole scope down every stack level, so a drilled view stays consistent with
+// the header. It performs no database work and is safe on the ticker.
+func (m *Model) resolveScope() {
+	m.scope.From, m.scope.To = m.timeRange.bounds(m.now())
 	for i := range m.stack {
 		m.stack[i].scope.From = m.scope.From
 		m.stack[i].scope.To = m.scope.To
 		m.stack[i].scope.Tool = m.scope.Tool
 	}
+}
+
+// applyScope resolves and then refetches. Only the keypress paths use it; the
+// ticker resolves and lets the asynchronous refresh do the fetching.
+func (m *Model) applyScope() {
+	m.resolveScope()
 	m.reloadCurrent()
 }
 
@@ -468,7 +486,7 @@ func (m Model) bodyTitle(entry *stackEntry) string {
 }
 
 func (m Model) rangeText() string {
-	text := m.rangeLabel
+	text := m.timeRange.label()
 	if !m.totals.From.IsZero() {
 		text += fmt.Sprintf("  %s → %s",
 			m.totals.From.Format("2006-01-02"), m.totals.To.Format("2006-01-02"))
