@@ -9,6 +9,11 @@ quota usage — by project, session, model, day, subagent, or workflow.
 Everything runs locally. ccdash makes no network requests, reads only files the
 agents already wrote, and never sends your data anywhere.
 
+<!-- SCREENSHOT: hero — the Projects view at ~120x35, showing the header with
+     range and totals, a few projects with cost bars and trend sparklines.
+     Save as docs/images/hero.png, then delete this comment and uncomment: -->
+<!-- ![ccdash](docs/images/hero.png) -->
+
 ## Why
 
 The transcripts on your disk contain every token you have spent, but they are
@@ -72,6 +77,16 @@ Press `:` and type a name, or its prefix:
 | `pulse`     | Cost over time as a braille chart                  |
 | `unpriced`  | Models the rate table cannot price                 |
 
+<!-- SCREENSHOT: sessions or requests view, drilled in from a project, so the
+     breadcrumb at the bottom shows the stack. Save as docs/images/drill.png,
+     then delete this comment and uncomment: -->
+<!-- ![Drilling from a project into its sessions](docs/images/drill.png) -->
+
+<!-- SCREENSHOT: the pulse view — the braille cost chart carries the project
+     better than any table does. Save as docs/images/pulse.png, then delete
+     this comment and uncomment: -->
+<!-- ![Cost over time](docs/images/pulse.png) -->
+
 ### Keys
 
 | Key                 | Does                                            |
@@ -115,6 +130,23 @@ writes outside ccdash's own directories.
 Without it, ccdash falls back to the cached utilization in `~/.claude.json`,
 which can be stale or absent. Limits with no live sample render as an empty
 gauge with a reason, never as a stale number.
+
+<!-- SCREENSHOT: the limits view, ideally with at least one live gauge and one
+     stale or absent one, so the provenance and age columns are visible. That
+     contrast is the point of the panel. Save as docs/images/limits.png, then
+     delete this comment and uncomment: -->
+<!-- ![Quota limits with provenance and age](docs/images/limits.png) -->
+
+## Screenshots
+
+<!-- Drop any additional PNGs here. Suggested, in rough order of usefulness to
+     someone deciding whether to install:
+       docs/images/models.png    cost split across models
+       docs/images/agents.png    subagent attribution
+       docs/images/help.png      the ? keymap
+     Reference them as: ![description](docs/images/name.png) -->
+
+_Screenshots coming._
 
 ## Pricing
 
