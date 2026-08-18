@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type RequestRow struct {

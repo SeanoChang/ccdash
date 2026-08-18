@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 // money formats a cost, or an em dash when the row could not be priced.

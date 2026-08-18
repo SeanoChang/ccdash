@@ -727,7 +727,7 @@ The comment now describes reality if it names the fetching, not the paths:
 
 Run: `go test ./internal/tui/ -count=1 2>&1 | tail -3`
 
-Expected: `ok github.com/seanochang/ccdash/internal/tui`.
+Expected: `ok github.com/SeanoChang/ccdash/internal/tui`.
 
 - [ ] **Step 6: Commit**
 

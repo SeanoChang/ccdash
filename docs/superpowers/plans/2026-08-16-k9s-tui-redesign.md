@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Module path:** `github.com/seanochang/ccdash`. Go 1.26.
+- **Module path:** `github.com/SeanoChang/ccdash`. Go 1.26.
 - **No CGO.** The binary must build with `CGO_ENABLED=0`.
 - **No new dependencies.** Bubble Tea and Lip Gloss are already present; nothing else may be added.
 - **Never pass a string containing `\n` to a lipgloss `Render()`.** Lip Gloss pads every line of a multi-line block to the widest line, silently indenting whatever is written next. Style the text; emit newlines outside. This is enforced by a test in Task 6.
@@ -730,7 +730,7 @@ package agg
 import (
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestBySessionGroupsAndSpansTime(t *testing.T) {
@@ -825,7 +825,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type SessionBucket struct {
@@ -920,7 +920,7 @@ package agg
 import (
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestByAgentExcludesMainLoop(t *testing.T) {
@@ -997,7 +997,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type AgentBucket struct {
@@ -1141,7 +1141,7 @@ package agg
 import (
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestRequestsNewestFirstAndPaginated(t *testing.T) {
@@ -1251,7 +1251,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type RequestRow struct {
@@ -1490,8 +1490,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type Alignment int
@@ -1746,7 +1746,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 const (
@@ -2681,7 +2681,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 // fakeView is a two-level resource used to exercise navigation.
@@ -2852,9 +2852,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 type stackEntry struct {
@@ -3721,8 +3721,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 func seedStore(t *testing.T) *store.Store {
@@ -3884,7 +3884,7 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 // Temporary stub. Replaced in full by Task 15.
@@ -3907,9 +3907,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 // money formats a cost, or an em dash when the row could not be priced.
@@ -3981,8 +3981,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type ModelsView struct{}
@@ -4039,8 +4039,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type DaysView struct{}
@@ -4099,8 +4099,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 // UnpricedView promotes the old footer warning into an inspectable resource.
@@ -4184,7 +4184,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestSessionsViewAndDrillToRequests(t *testing.T) {
@@ -4342,9 +4342,9 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 type SessionsView struct{}
@@ -4400,8 +4400,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 const requestsPageSize = 500
@@ -4480,8 +4480,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type AgentsView struct{}
@@ -4580,8 +4580,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type LimitsView struct{}
@@ -4692,9 +4692,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 // PulseView is the one non-table view: a cost-over-time chart. It plots

@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Go module path:** `github.com/seanochang/ccdash`. Go 1.26.
+- **Go module path:** `github.com/SeanoChang/ccdash`. Go 1.26.
 - **No CGO.** `modernc.org/sqlite` only. The binary must build with `CGO_ENABLED=0`.
 - **Source directories are read-only.** Never write to, move, or delete anything under `~/.claude` or `~/.codex`. The single exception is `setup-statusline` (Task 8), which is confirmed and backed up.
 - **Never drop a row you cannot price.** Unpriceable rows are stored, counted in `unpriced`, and surfaced in the UI. Silent exclusion is a spec violation.
@@ -61,7 +61,7 @@
 
 ```bash
 cd ccdash
-go mod init github.com/seanochang/ccdash
+go mod init github.com/SeanoChang/ccdash
 ```
 
 - [x] **Step 2: Write the failing test**
@@ -536,7 +536,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func openTmp(t *testing.T) *Store {
@@ -727,7 +727,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 	_ "modernc.org/sqlite"
 )
 
@@ -925,7 +925,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 func parseFixture(t *testing.T, name string) source.Result {
@@ -1008,7 +1008,7 @@ Create `internal/source/source.go`:
 ```go
 package source
 
-import "github.com/seanochang/ccdash/internal/model"
+import "github.com/SeanoChang/ccdash/internal/model"
 
 type FileRef struct {
 	Path  string
@@ -1048,8 +1048,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 // usageMarker is the byte prefilter. Two-thirds of transcript lines fail it,
@@ -1239,8 +1239,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 func parseFixture(t *testing.T) source.Result {
@@ -1353,8 +1353,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 var tokenMarker = []byte(`"token_count"`)
@@ -1613,8 +1613,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 func ref(t *testing.T, name string) source.FileRef {
@@ -1716,8 +1716,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 func parseTime(s string) *time.Time {
@@ -1909,9 +1909,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source/claude"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source/claude"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 const fixture = `{"type":"assistant","timestamp":"2026-08-15T00:00:00.000Z","sessionId":"s","cwd":"/p","requestId":"r1","message":{"model":"claude-opus-5","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":0}}}
@@ -1993,7 +1993,7 @@ type sourceIface = interface {
 
 - [x] **Step 2: Simplify the test to the real signature**
 
-Replace the alias block and both `toSources(...)` calls so the file uses `[]source.Source{claude.New(dir)}` directly, and add `"github.com/seanochang/ccdash/internal/source"` to the imports.
+Replace the alias block and both `toSources(...)` calls so the file uses `[]source.Source{claude.New(dir)}` directly, and add `"github.com/SeanoChang/ccdash/internal/source"` to the imports.
 
 - [x] **Step 3: Run test to verify it fails**
 
@@ -2011,12 +2011,12 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
-	"github.com/seanochang/ccdash/internal/source/claude"
-	"github.com/seanochang/ccdash/internal/source/codex"
-	"github.com/seanochang/ccdash/internal/source/limits"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/source/claude"
+	"github.com/SeanoChang/ccdash/internal/source/codex"
+	"github.com/SeanoChang/ccdash/internal/source/limits"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 type Stats struct {
@@ -2149,10 +2149,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/ingest"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/ingest"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 const version = "0.1.0"
@@ -2484,8 +2484,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 func seeded(t *testing.T) (*store.Store, *model.Pricing) {
@@ -2616,7 +2616,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type Filter struct {
@@ -3172,8 +3172,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestViewRendersEmptyState(t *testing.T) {
@@ -3277,10 +3277,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 var (
@@ -3544,7 +3544,7 @@ ingests and then launches the TUI:
 		// …unchanged…
 ```
 
-with `"github.com/seanochang/ccdash/internal/tui"` imported.
+with `"github.com/SeanoChang/ccdash/internal/tui"` imported.
 
 - [x] **Step 6: Run tests to verify they pass**
 

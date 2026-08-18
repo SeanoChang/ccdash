@@ -1,6 +1,6 @@
 package source
 
-import "github.com/seanochang/ccdash/internal/model"
+import "github.com/SeanoChang/ccdash/internal/model"
 
 type FileRef struct {
 	Path  string

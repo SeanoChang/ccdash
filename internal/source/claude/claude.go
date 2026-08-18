@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
 )
 
 // Two-thirds of transcript lines do not contain usage, and those lines carry

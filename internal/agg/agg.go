@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type Filter struct {

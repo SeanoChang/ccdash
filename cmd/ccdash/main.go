@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/ingest"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
-	"github.com/seanochang/ccdash/internal/tui"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/ingest"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/tui"
 )
 
 const version = "0.1.0"

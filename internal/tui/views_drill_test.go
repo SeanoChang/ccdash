@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestSessionsViewAndDrillToRequests(t *testing.T) {

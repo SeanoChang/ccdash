@@ -33,7 +33,7 @@ correcting a price re-prices your entire history with no re-ingest.
 Requires Go 1.26 or newer.
 
 ```bash
-go install github.com/seanochang/ccdash/cmd/ccdash@latest
+go install github.com/SeanoChang/ccdash/cmd/ccdash@latest
 ```
 
 Or build from a clone:

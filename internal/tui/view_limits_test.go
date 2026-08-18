@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 // seedLimits gives both tools a live limit sample, plus one scoped weekly limit

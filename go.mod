@@ -1,4 +1,4 @@
-module github.com/seanochang/ccdash
+module github.com/SeanoChang/ccdash
 
 go 1.26
 

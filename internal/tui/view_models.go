@@ -3,8 +3,8 @@ package tui
 import (
 	"database/sql"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 type ModelsView struct{}

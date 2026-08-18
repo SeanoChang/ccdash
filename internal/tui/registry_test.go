@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestDefaultRegistryCoversEveryDocumentedCommand(t *testing.T) {

@@ -6,12 +6,12 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/source"
-	"github.com/seanochang/ccdash/internal/source/claude"
-	"github.com/seanochang/ccdash/internal/source/codex"
-	"github.com/seanochang/ccdash/internal/source/limits"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/source"
+	"github.com/SeanoChang/ccdash/internal/source/claude"
+	"github.com/SeanoChang/ccdash/internal/source/codex"
+	"github.com/SeanoChang/ccdash/internal/source/limits"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 type Stats struct {

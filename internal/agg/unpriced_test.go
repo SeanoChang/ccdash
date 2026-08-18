@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 // seedUnpricedRollups builds a store holding one priceable request and two requests on

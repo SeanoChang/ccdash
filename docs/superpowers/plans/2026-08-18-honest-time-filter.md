@@ -772,7 +772,7 @@ In `internal/agg/agg.go`, inside `Filter.where`, change the `To` clause from
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `go test ./internal/agg/ 2>&1 | tail -5` Expected:
-`ok github.com/seanochang/ccdash/internal/agg`
+`ok github.com/SeanoChang/ccdash/internal/agg`
 
 - [ ] **Step 5: Commit**
 

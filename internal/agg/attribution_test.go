@@ -3,7 +3,7 @@ package agg
 import (
 	"testing"
 
-	"github.com/seanochang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/model"
 )
 
 func TestByAgentExcludesMainLoop(t *testing.T) {

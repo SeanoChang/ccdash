@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/store"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/store"
 )
 
 func seeded(t *testing.T) (*store.Store, *model.Pricing) {

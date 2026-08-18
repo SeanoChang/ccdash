@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 const (

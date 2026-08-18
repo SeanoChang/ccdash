@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/seanochang/ccdash/internal/agg"
-	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
+	"github.com/SeanoChang/ccdash/internal/agg"
+	"github.com/SeanoChang/ccdash/internal/model"
+	"github.com/SeanoChang/ccdash/internal/render"
 )
 
 // PulseView is the one non-table view: a cost-over-time chart. It plots
