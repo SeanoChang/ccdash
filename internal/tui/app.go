@@ -266,6 +266,12 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.setRange(timeRange{kind: rangeRolling, span: 30 * 24 * time.Hour})
 	case "a":
 		return m.setRange(timeRange{kind: rangeAll})
+	case "D":
+		return m.setRange(timeRange{kind: rangeToday})
+	case "W":
+		return m.setRange(timeRange{kind: rangeWeek})
+	case "M":
+		return m.setRange(timeRange{kind: rangeMonth})
 	case "r":
 		if m.inFlight {
 			return m, nil

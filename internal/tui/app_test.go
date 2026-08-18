@@ -267,3 +267,46 @@ func TestRangeAllClearsBothBounds(t *testing.T) {
 			m.scope.From, m.scope.To)
 	}
 }
+
+// TestCalendarPresetKeys covers the windows a rolling shortcut cannot express:
+// the ones a bill is reconciled against.
+func TestCalendarPresetKeys(t *testing.T) {
+	clock := time.Date(2026, 8, 18, 15, 30, 0, 0, time.Local)
+
+	for _, c := range []struct {
+		key      string
+		wantFrom time.Time
+		label    string
+	}{
+		{"D", time.Date(2026, 8, 18, 0, 0, 0, 0, time.Local), "today"},
+		{"W", time.Date(2026, 8, 17, 0, 0, 0, 0, time.Local), "this week"},
+		{"M", time.Date(2026, 8, 1, 0, 0, 0, 0, time.Local), "this month"},
+	} {
+		m := newTestModel()
+		m.now = func() time.Time { return clock }
+		next, _ := m.Update(key(c.key))
+		m = next.(Model)
+
+		if !m.scope.From.Equal(c.wantFrom) {
+			t.Errorf("%s: From = %v, want %v", c.key, m.scope.From, c.wantFrom)
+		}
+		if got := m.timeRange.label(); got != c.label {
+			t.Errorf("%s: label = %q, want %q", c.key, got, c.label)
+		}
+	}
+}
+
+// TestRangeChangeResetsPagination: a narrower window cannot need the depth the
+// previous one was paged into.
+func TestRangeChangeResetsPagination(t *testing.T) {
+	m := newTestModel()
+	m.now = func() time.Time { return time.Date(2026, 8, 18, 15, 0, 0, 0, time.Local) }
+	m.stack[0].pages = 4
+
+	next, _ := m.Update(key("D"))
+	m = next.(Model)
+
+	if m.stack[0].pages != 1 {
+		t.Errorf("pages = %d after a range change, want 1", m.stack[0].pages)
+	}
+}

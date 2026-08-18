@@ -222,7 +222,7 @@ func TestHelpListsEverySpecBinding(t *testing.T) {
 	seen := strings.Join(helpScrolled(t, 100, 24), "\n")
 	for _, want := range []string{
 		"j k ↓ ↑", "ctrl-f ctrl-b", "g G", "enter", "esc", "s S",
-		"/", ":", "r", "1 2 3", "d w m a", "?", "q ctrl-c", ":q",
+		"/", ":", "r", "1 2 3", "d w m a", "D W M", "?", "q ctrl-c", ":q",
 	} {
 		if !strings.Contains(seen, want) {
 			t.Errorf("help does not document %q", want)
@@ -239,8 +239,8 @@ func TestHelpListsEverySpecBinding(t *testing.T) {
 // spec §5.5 binding, one per command the prompt accepts, and a distinct key on
 // each so the table can hold the selection across a refresh.
 func TestHelpRowsAreTheKeymapPlusTheCommands(t *testing.T) {
-	if len(helpBindings) != 15 {
-		t.Errorf("spec §5.5 lists 15 bindings; helpBindings has %d", len(helpBindings))
+	if len(helpBindings) != 16 {
+		t.Errorf("spec §5.5 lists 16 bindings; helpBindings has %d", len(helpBindings))
 	}
 	rows := helpRows()
 	if want := len(helpBindings) + len(helpCommands); len(rows) != want {
