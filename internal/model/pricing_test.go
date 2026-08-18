@@ -34,7 +34,7 @@ func TestCostDatedModelID(t *testing.T) {
 }
 
 func TestCostUnpriced(t *testing.T) {
-	for _, name := range []string{"gpt-5-codex", "<synthetic>", "totally-unknown"} {
+	for _, name := range []string{"codex-auto-review", "<synthetic>", "totally-unknown"} {
 		if _, ok := DefaultPricing().Cost(Record{Model: name, OutputTok: 1000}); ok {
 			t.Errorf("%q must be unpriced, not guessed", name)
 		}
@@ -67,8 +67,14 @@ func TestLoadPricingCreatesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(contents), "[models.\"gpt-5-codex\"]\ninput") {
-		t.Fatal("unverified Codex rates must remain commented out")
+	// gpt-5-codex now carries a published rate, so the default file must emit
+	// it live. codex-auto-review is not a separately priced public model, so it
+	// must still be written commented out rather than invented.
+	if !strings.Contains(string(contents), "[models.\"gpt-5-codex\"]\ninput") {
+		t.Fatal("published Codex rates must be emitted, not commented out")
+	}
+	if strings.Contains(string(contents), "\n[models.\"codex-auto-review\"]") {
+		t.Fatal("codex-auto-review has no published rate and must stay commented out")
 	}
 	if _, err := LoadPricing(path); err != nil {
 		t.Fatalf("reload failed: %v", err)

@@ -66,6 +66,22 @@ func DefaultPricing() *Pricing {
 		"gpt-5":         oai(1.25, 0.125, 0, 10.00),
 		"gpt-5-mini":    oai(0.25, 0.025, 0, 2.00),
 		"gpt-5-nano":    oai(0.05, 0.005, 0, 0.40),
+
+		// Codex models, from developers.openai.com/api/docs/pricing and the
+		// per-model pages, verified 2026-08-18. These were deliberately left
+		// unpriced in the first table because they were absent from the
+		// published catalogue and guessing would have mispriced most local
+		// Codex usage while looking authoritative. They are published now.
+		"gpt-5-codex":        oai(1.25, 0.125, 0, 10.00),
+		"gpt-5.1-codex":      oai(1.25, 0.125, 0, 10.00),
+		"gpt-5.1-codex-max":  oai(1.25, 0.125, 0, 10.00),
+		"gpt-5.1-codex-mini": oai(0.25, 0.025, 0, 2.00),
+		"gpt-5.2-codex":      oai(1.75, 0.175, 0, 14.00),
+		"gpt-5.3-codex":      oai(1.75, 0.175, 0, 14.00),
+
+		// codex-auto-review stays unpriced on purpose: it is Codex's internal
+		// review routing, not a separately priced public API model, so any
+		// rate here would be invented. Its rows still show tokens.
 	}}
 }
 
@@ -184,6 +200,8 @@ func defaultTOML() string {
 		"claude-sonnet-4-6", "claude-haiku-4-5", "gpt-5.6-sol",
 		"gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.2",
 		"gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano",
+		"gpt-5-codex", "gpt-5.1-codex", "gpt-5.1-codex-max",
+		"gpt-5.1-codex-mini", "gpt-5.2-codex", "gpt-5.3-codex",
 	}
 	for _, name := range models {
 		r := defaults.rates[name]
@@ -203,8 +221,7 @@ func defaultTOML() string {
 	b.WriteString("# These Codex variants have no verified published rates. Uncomment and fill\n")
 	b.WriteString("# them in to price them; their tokens are still archived while unpriced.\n")
 	for _, name := range []string{
-		"gpt-5-codex", "gpt-5.3-codex", "gpt-5.1-codex-max", "gpt-5.1-codex",
-		"gpt-5.2-codex", "gpt-5.1-codex-mini", "codex-auto-review",
+		"codex-auto-review",
 	} {
 		fmt.Fprintf(&b, "# [models.%q]\n# input = 0.0\n# cached_input = 0.0\n# output = 0.0\n\n", name)
 	}
