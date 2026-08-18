@@ -27,7 +27,9 @@ func (f Filter) where() (string, []any) {
 		args = append(args, f.From.Unix())
 	}
 	if !f.To.IsZero() {
-		conditions = append(conditions, "ts <= ?")
+		// Exclusive: a calendar window's To is the next window's From, so an
+		// inclusive bound would count a midnight request in both.
+		conditions = append(conditions, "ts < ?")
 		args = append(args, f.To.Unix())
 	}
 	if f.Tool != "" {

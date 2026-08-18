@@ -257,3 +257,34 @@ func TestScannedTimestampsCarryTheLocalZone(t *testing.T) {
 		t.Errorf("scanDetail location = %v, want %v", got, time.Local)
 	}
 }
+
+// TestFilterUpperBoundIsExclusive pins the interval as [From, To). A calendar
+// window's To is the next window's From, so an inclusive bound would count a
+// request landing exactly on midnight in both months.
+func TestFilterUpperBoundIsExclusive(t *testing.T) {
+	s, err := store.Open(t.TempDir() + "/usage.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	boundary := time.Date(2026, 9, 1, 0, 0, 0, 0, time.Local)
+	if _, err := s.UpsertRecords([]model.Record{
+		{ID: "before", Tool: model.ToolClaude, TS: boundary.Add(-time.Second),
+			Model: "claude-opus-5", Session: "s1", OutputTok: 10},
+		{ID: "on", Tool: model.ToolClaude, TS: boundary,
+			Model: "claude-opus-5", Session: "s1", OutputTok: 10},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	totals, err := Totals(s.DB(), model.DefaultPricing(),
+		Filter{From: boundary.AddDate(0, -1, 0), To: boundary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if totals.Requests != 1 {
+		t.Errorf("requests = %d, want 1 — the row on the boundary belongs to "+
+			"the next window, not this one", totals.Requests)
+	}
+}
