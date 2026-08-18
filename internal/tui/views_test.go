@@ -12,6 +12,7 @@ import (
 
 func seedStore(t *testing.T) *store.Store {
 	t.Helper()
+	requireUnpriced(t, model.DefaultPricing(), unpricedFixtureModel)
 	s, err := store.Open(t.TempDir() + "/usage.db")
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +25,7 @@ func seedStore(t *testing.T) *store.Store {
 			Model: "claude-opus-5", Project: "/home/u/alpha", Session: "s1",
 			Agent: "agent-x", Workflow: "wf-1", Depth: 1, OutputTok: 2000},
 		{ID: "b1", Tool: model.ToolCodex, TS: time.Unix(1_700_172_800, 0),
-			Model: "gpt-5-codex", Project: "/home/u/beta", Session: "s2", OutputTok: 500},
+			Model: unpricedFixtureModel, Project: "/home/u/beta", Session: "s2", OutputTok: 500},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +161,7 @@ func TestModelsViewIncludesUnpricedRow(t *testing.T) {
 	}
 	var found bool
 	for _, row := range rows {
-		if strings.Contains(row.Cells[0].Text, "gpt-5-codex") {
+		if strings.Contains(row.Cells[0].Text, unpricedFixtureModel) {
 			found = true
 			costCell := row.Cells[len(row.Cells)-1].Text
 			if !strings.Contains(costCell, "—") {
@@ -169,7 +170,7 @@ func TestModelsViewIncludesUnpricedRow(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("gpt-5-codex must be listed even though it has no rate")
+		t.Errorf("%s must be listed even though it has no rate", unpricedFixtureModel)
 	}
 }
 
@@ -196,8 +197,8 @@ func TestUnpricedViewListsOnlyUnpriceable(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("got %d rows, want 1", len(rows))
 	}
-	if rows[0].Key != "gpt-5-codex" {
-		t.Errorf("key = %q, want gpt-5-codex", rows[0].Key)
+	if rows[0].Key != unpricedFixtureModel {
+		t.Errorf("key = %q, want %s", rows[0].Key, unpricedFixtureModel)
 	}
 }
 

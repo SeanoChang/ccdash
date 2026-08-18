@@ -70,7 +70,8 @@ func TestRequestsShowsUnpricedAsEmDash(t *testing.T) {
 		}
 	}
 	if !sawDash {
-		t.Error("the gpt-5-codex request must render its cost as —, not $0.00")
+		t.Errorf("the %s request must render its cost as —, not $0.00",
+			unpricedFixtureModel)
 	}
 	if len(rows) != 3 {
 		t.Errorf("got %d rows, want all 3 — unpriceable rows are never dropped", len(rows))

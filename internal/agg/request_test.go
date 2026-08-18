@@ -65,8 +65,8 @@ func TestUnpricedListGroupsAndSpans(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %d unpriced models, want 1", len(got))
 	}
-	if got[0].Model != "gpt-5-codex" {
-		t.Errorf("model = %q, want gpt-5-codex", got[0].Model)
+	if got[0].Model != unpricedFixtureModel {
+		t.Errorf("model = %q, want %s", got[0].Model, unpricedFixtureModel)
 	}
 	if got[0].Requests != 1 {
 		t.Errorf("requests = %d, want 1", got[0].Requests)
@@ -77,9 +77,10 @@ func TestUnpricedListGroupsAndSpans(t *testing.T) {
 }
 
 // seedUnpriced builds a store with one priced and one deliberately unpriced
-// model. gpt-5-codex is absent from the default table by design.
+// model. unpricedFixtureModel is absent from the default table by design.
 func seedUnpriced(t *testing.T) *sql.DB {
 	t.Helper()
+	requireUnpriced(t, model.DefaultPricing(), unpricedFixtureModel)
 	s, err := store.Open(t.TempDir() + "/usage.db")
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +90,7 @@ func seedUnpriced(t *testing.T) *sql.DB {
 		{ID: "p1", Tool: model.ToolClaude, TS: time.Unix(1000, 0),
 			Model: "claude-opus-5", Session: "s1", OutputTok: 100},
 		{ID: "u1", Tool: model.ToolCodex, TS: time.Unix(2000, 0),
-			Model: "gpt-5-codex", Session: "s1", OutputTok: 200},
+			Model: unpricedFixtureModel, Session: "s1", OutputTok: 200},
 	}); err != nil {
 		t.Fatal(err)
 	}

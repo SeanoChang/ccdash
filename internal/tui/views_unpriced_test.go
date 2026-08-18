@@ -16,6 +16,7 @@ import (
 // but carries no tokens, which is a genuine $0.00 and must not read as unknown.
 func seedUnpriceable(t *testing.T) *sql.DB {
 	t.Helper()
+	requireUnpriced(t, model.DefaultPricing(), unpricedFixtureModel)
 	s, err := store.Open(t.TempDir() + "/usage.db")
 	if err != nil {
 		t.Fatal(err)
@@ -29,11 +30,11 @@ func seedUnpriceable(t *testing.T) *sql.DB {
 			Workflow: "wf-p", Depth: 1, InputTok: 500_000, OutputTok: 1_000_000},
 		{ID: "z1", Tool: model.ToolClaude, TS: priced.Add(time.Hour),
 			Model: "claude-haiku-4-5", Project: "/p/priced", Session: "s-priced"},
-		{ID: "u1", Tool: model.ToolCodex, TS: unpriced, Model: "gpt-5-codex",
+		{ID: "u1", Tool: model.ToolCodex, TS: unpriced, Model: unpricedFixtureModel,
 			Project: "/p/unpriced", Session: "s-unpriced", Agent: "agent-u",
 			Workflow: "wf-u", Depth: 1, InputTok: 60, OutputTok: 40},
 		{ID: "u2", Tool: model.ToolCodex, TS: unpriced.Add(time.Hour),
-			Model: "gpt-5-codex", Project: "/p/unpriced", Session: "s-unpriced",
+			Model: unpricedFixtureModel, Project: "/p/unpriced", Session: "s-unpriced",
 			Agent: "agent-u", Workflow: "wf-u", Depth: 1, InputTok: 6, OutputTok: 4},
 	}); err != nil {
 		t.Fatal(err)
@@ -82,7 +83,7 @@ func TestViewsShowEmDashForUnpriceableCosts(t *testing.T) {
 	}{
 		{ProjectsView{}, "/p/unpriced", "/p/priced"},
 		{DaysView{}, "2026-08-16", "2026-08-15"},
-		{ModelsView{}, "gpt-5-codex", "claude-opus-5"},
+		{ModelsView{}, unpricedFixtureModel, "claude-opus-5"},
 		{AgentsView{}, "agent-u", "agent-p"},
 		{WorkflowsView{}, "wf-u", "wf-p"},
 	} {
@@ -115,5 +116,20 @@ func TestModelsViewPricesAZeroCostModel(t *testing.T) {
 	}
 	if got := costCell(t, ModelsView{}, rows, "claude-haiku-4-5"); got != "$0.00" {
 		t.Errorf("priced zero-token model cost = %q, want $0.00", got)
+	}
+}
+
+// unpricedFixtureModel is a model the default rate table has no entry for.
+// These tests previously used gpt-5-codex, which acquired a published rate on
+// 2026-08-18; the fixture rows then priced to $0.00125, printed as "$0.00",
+// and five em-dash assertions failed for a reason none of them named.
+// requireUnpriced makes that failure say what actually happened.
+const unpricedFixtureModel = "codex-auto-review"
+
+func requireUnpriced(t *testing.T, pricing *model.Pricing, name string) {
+	t.Helper()
+	if pricing.HasRate(model.NormalizeModel(name)) {
+		t.Fatalf("fixture model %q now has a published rate; these tests need "+
+			"a model the default table cannot price — pick another", name)
 	}
 }
