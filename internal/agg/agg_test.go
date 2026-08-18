@@ -2,6 +2,7 @@ package agg
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -286,5 +287,59 @@ func TestFilterUpperBoundIsExclusive(t *testing.T) {
 	if totals.Requests != 1 {
 		t.Errorf("requests = %d, want 1 — the row on the boundary belongs to "+
 			"the next window, not this one", totals.Requests)
+	}
+}
+
+// TestByBucketAtHourResolution covers the window a day-bucketed chart cannot
+// draw: six hours of activity is one bar by day and six by hour.
+func TestByBucketAtHourResolution(t *testing.T) {
+	s, err := store.Open(t.TempDir() + "/usage.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	base := time.Date(2026, 8, 18, 9, 0, 0, 0, time.Local)
+	var recs []model.Record
+	for i := range 6 {
+		recs = append(recs, model.Record{
+			ID: fmt.Sprintf("h%d", i), Tool: model.ToolClaude,
+			TS:    base.Add(time.Duration(i) * time.Hour),
+			Model: "claude-opus-5", Session: "s1", OutputTok: 1000,
+		})
+	}
+	if _, err := s.UpsertRecords(recs); err != nil {
+		t.Fatal(err)
+	}
+
+	byHour, err := ByBucket(s.DB(), model.DefaultPricing(), Filter{}, ResHour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byHour) != 6 {
+		t.Errorf("hour buckets = %d, want 6", len(byHour))
+	}
+	if !byHour[0].Day.Equal(base) {
+		t.Errorf("first hour bucket = %v, want %v", byHour[0].Day, base)
+	}
+
+	byDay, err := ByBucket(s.DB(), model.DefaultPricing(), Filter{}, ResDay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byDay) != 1 {
+		t.Errorf("day buckets = %d, want 1", len(byDay))
+	}
+}
+
+// TestByDayStillBucketsByDay keeps the wrapper honest: ByProject's sparkline
+// and every existing caller depend on this signature and this behaviour.
+func TestByDayStillBucketsByDay(t *testing.T) {
+	got, err := ByDay(seedUnpricedRollups(t), model.DefaultPricing(), Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("day buckets = %d, want 1", len(got))
 	}
 }

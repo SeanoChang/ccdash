@@ -164,14 +164,35 @@ func dayIn(t time.Time, loc *time.Location) time.Time {
 // view, the Pulse axis and every Started column at once.
 func dayLocal(t time.Time) time.Time { return dayIn(t, time.Local) }
 
-func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, error) {
+// Resolution is the width of one chart bucket. A window narrower than a day
+// has nothing to plot against day buckets, so the caller picks from the span
+// it resolved rather than from a constant.
+type Resolution int
+
+const (
+	ResDay Resolution = iota
+	ResHour
+)
+
+// bucketOf truncates t to the start of its bucket in the local zone.
+func bucketOf(t time.Time, res Resolution) time.Time {
+	if res == ResHour {
+		local := t.Local()
+		year, month, day := local.Date()
+		return time.Date(year, month, day, local.Hour(), 0, 0, 0, time.Local)
+	}
+	return dayLocal(t)
+}
+
+func ByBucket(db *sql.DB, pricing *model.Pricing, filter Filter,
+	res Resolution) ([]DayBucket, error) {
 	rows, err := scanRows(db, filter)
 	if err != nil {
 		return nil, err
 	}
 	buckets := make(map[time.Time]*DayBucket)
 	for _, row := range rows {
-		day := dayLocal(row.record.TS)
+		day := bucketOf(row.record.TS, res)
 		bucket := buckets[day]
 		if bucket == nil {
 			bucket = &DayBucket{Day: day}
@@ -191,6 +212,12 @@ func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, erro
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Day.Before(result[j].Day) })
 	return result, nil
+}
+
+// ByDay is ByBucket at day resolution. ByProject's sparkline and the Days
+// view are both day-shaped, so they keep this signature.
+func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, error) {
+	return ByBucket(db, pricing, filter, ResDay)
 }
 
 type ModelBucket struct {
