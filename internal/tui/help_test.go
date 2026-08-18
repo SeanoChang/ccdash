@@ -427,9 +427,15 @@ func TestHelpOverlayFrameHoldsAtCrampedSizes(t *testing.T) {
 			out := openHelpAt(t, size.cols, size.rows)
 			// The frame gives the panel what is left after the header and the
 			// footer; the first of those rows is the border, the rest are body.
+			// The frame invariant this test is named for holds at EVERY size,
+			// including those with no room for a body row. Asserting it before
+			// any bail-out is the point: an early return let the size table
+			// claim coverage it never delivered.
+			assertExactFrame(t, out, size.cols, size.rows)
+
 			visible := size.rows - headerHeight(size.rows) - footerLines - 1
 			if visible < 1 {
-				return
+				t.Skipf("no body row survives the frame at %dx%d; frame exactness asserted above", size.rows, size.cols)
 			}
 			if !strings.Contains(stripANSI(out), "q ctrl-c") {
 				t.Errorf("%d body rows on screen and no way out in them:\n%s",
