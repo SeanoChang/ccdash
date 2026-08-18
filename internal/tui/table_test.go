@@ -121,6 +121,33 @@ func TestSparkDomainIsSharedAcrossRows(t *testing.T) {
 	}
 }
 
+func TestLocalSparklineScaleKeepsSmallTrendVisible(t *testing.T) {
+	cell := Cell{Series: []float64{1, 5, 2, 8, 3}}
+	shared := formatCell(cell,
+		Column{Kind: CellSparkline, SparkScale: SparkScaleShared}, 5, 1_000)
+	local := formatCell(cell,
+		Column{Kind: CellSparkline, SparkScale: SparkScaleLocal}, 5, 1_000)
+	if shared == local {
+		t.Fatalf("local scale must not collapse to the global-domain result %q", local)
+	}
+	if strings.Trim(local, "▁") == "" {
+		t.Errorf("local scale left a variable series visually flat: %q", local)
+	}
+}
+
+func TestPercentBarShowsValueAndTinyPositiveTick(t *testing.T) {
+	got := formatCell(Cell{Value: 0.0001}, Column{Kind: CellPercentBar}, 18, 0)
+	if lipgloss.Width(got) != 18 {
+		t.Fatalf("width = %d, want 18", lipgloss.Width(got))
+	}
+	if !strings.Contains(got, "<0.1%") {
+		t.Errorf("tiny share needs an honest numeric label, got %q", got)
+	}
+	if !strings.ContainsAny(got, "▏▎▍▌▋▊▉█") {
+		t.Errorf("tiny positive share needs a visible tick, got %q", got)
+	}
+}
+
 func numericRows(n int) []Row {
 	rows := make([]Row, 0, n)
 	for i := 0; i < n; i++ {
@@ -208,6 +235,51 @@ func TestSortNumericUsesValueNotText(t *testing.T) {
 	body := table.Render()
 	if !strings.Contains(body[1], "9") {
 		t.Errorf("ascending numeric sort should put 9 first, got %q", body[1])
+	}
+}
+
+func TestSortCyclesOnlyEnabledOptionsAndUsesDefaultDirection(t *testing.T) {
+	table := NewTable([]Column{
+		{Title: "NAME", Sort: SortString, Kind: CellText},
+		{Title: "COST", Sort: SortNumeric, Kind: CellNumber, DisableSort: true},
+		{Title: "SHARE", Sort: SortNumeric, Kind: CellPercentBar, DefaultSortDesc: true},
+		{Title: "TREND", Sort: SortNumeric, Kind: CellSparkline, DisableSort: true},
+	})
+	table.SetRows([]Row{
+		{Key: "a", Cells: []Cell{{Text: "a"}, {Value: 10}, {Value: 0.1}, {}}},
+		{Key: "b", Cells: []Cell{{Text: "b"}, {Value: 90}, {Value: 0.9}, {}}},
+	})
+
+	table.NextSort()
+	if table.sortCol != 0 || table.sortDesc {
+		t.Fatalf("first option = column %d desc=%v, want NAME ascending", table.sortCol, table.sortDesc)
+	}
+	table.NextSort()
+	if table.sortCol != 2 || !table.sortDesc {
+		t.Fatalf("second option = column %d desc=%v, want SHARE descending", table.sortCol, table.sortDesc)
+	}
+	if table.visible[0].Key != "b" {
+		t.Errorf("descending share sort put %q first, want b", table.visible[0].Key)
+	}
+	table.NextSort()
+	if table.sortCol != 0 || table.sortDesc {
+		t.Fatalf("sort cycle did not wrap to NAME ascending: column %d desc=%v", table.sortCol, table.sortDesc)
+	}
+}
+
+func TestPathSortUsesFullTextBeforeDisplayTruncation(t *testing.T) {
+	table := NewTable([]Column{{Title: "NAME", Sort: SortString, Kind: CellPath}})
+	table.SetRows([]Row{
+		{Key: "second", Cells: []Cell{{Text: "/z/very/long/path/shared"}}},
+		{Key: "first", Cells: []Cell{{Text: "/a/very/long/path/shared"}}},
+	})
+	table.NextSort()
+	if table.visible[0].Key != "first" {
+		t.Errorf("path sort used display order instead of full text; first row = %q", table.visible[0].Key)
+	}
+	got := strings.TrimSpace(formatCell(table.visible[0].Cells[0], table.columns[0], 12, 0))
+	if !strings.HasPrefix(got, "…/") {
+		t.Errorf("narrow path display must truncate at a separator, got %q", got)
 	}
 }
 

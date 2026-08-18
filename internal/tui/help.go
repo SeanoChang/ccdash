@@ -30,15 +30,15 @@ var helpBindings = []helpBinding{
 	{"enter", "table", "Drill into selected row (no-op on a leaf)"},
 	{"esc", "table", "Pop the view stack; no-op at root"},
 	{"esc", "prompt", "Cancel the command or filter prompt"},
-	{"s S", "table", "Advance sort column / reverse direction"},
+	{"s S", "table", "Next sort option / reverse direction"},
 	{"/", "table", "Open the filter prompt"},
 	{":", "table", "Open the command prompt"},
 	{"r", "table", "Manual refresh now"},
 	{"1 2 3", "table", "Tool filter: all / claude / codex"},
 	{"d w m a", "table", "Range: day / week / month / all"},
 	{"?", "any", "Open this help; ? or esc closes it"},
-	{"q ctrl-c", "any", "Quit"},
-	{":q", "prompt", "Quit"},
+	{"q ctrl-c", "any", "Quit (q confirms; ctrl-c immediately)"},
+	{":q", "prompt", "Open quit confirmation"},
 }
 
 // helpCommands lists the canonical name of every command in DefaultRegistry —

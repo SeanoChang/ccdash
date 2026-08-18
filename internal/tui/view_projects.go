@@ -6,7 +6,6 @@ import (
 
 	"github.com/seanochang/ccdash/internal/agg"
 	"github.com/seanochang/ccdash/internal/model"
-	"github.com/seanochang/ccdash/internal/render"
 )
 
 // money formats a cost, or an em dash when the row could not be priced.
@@ -25,35 +24,41 @@ func (ProjectsView) Title() string { return "Projects" }
 
 func (ProjectsView) Columns() []Column {
 	return []Column{
-		{Title: "NAME", Sort: SortString, Kind: CellText},
-		{Title: "COST", Width: 12, Align: AlignRight, Sort: SortNumeric, Kind: CellNumber},
-		{Title: "SHARE", Width: 12, Sort: SortNumeric, Kind: CellBar},
-		// The series is cost per day, so the header's shared max is money.
-		{Title: "TREND", Width: 14, Sort: SortNumeric, Kind: CellSparkline, Unit: UnitMoney},
+		{Title: "NAME", Sort: SortString, Kind: CellPath},
+		{Title: "COST", Width: 12, Align: AlignRight, Sort: SortNumeric,
+			Kind: CellNumber, DisableSort: true},
+		{Title: "COST SHARE", Width: 18, Sort: SortNumeric, Kind: CellPercentBar,
+			DefaultSortDesc: true},
+		// Magnitude is already explicit in COST SHARE. A local scale gives each
+		// project enough vertical resolution to show its own day-to-day shape.
+		{Title: "TREND (REL)", Width: 14, Sort: SortNumeric, Kind: CellSparkline,
+			SparkScale: SparkScaleLocal, DisableSort: true},
 	}
 }
+
+// DefaultSort makes the initial cost-share order explicit in the header.
+// Pressing s alternates between this and full project-path order.
+func (ProjectsView) DefaultSort() (int, bool) { return 2, true }
 
 func (ProjectsView) Rows(db *sql.DB, pricing *model.Pricing, scope Scope) ([]Row, error) {
 	buckets, err := agg.ByProject(db, pricing, scope.Filter)
 	if err != nil {
 		return nil, err
 	}
-	top := 0.0
+	total := 0.0
 	for _, bucket := range buckets {
-		if bucket.Cost > top {
-			top = bucket.Cost
-		}
+		total += bucket.Cost
 	}
 	rows := make([]Row, 0, len(buckets))
 	for _, bucket := range buckets {
 		share := 0.0
-		if top > 0 {
-			share = bucket.Cost / top
+		if total > 0 {
+			share = bucket.Cost / total
 		}
 		rows = append(rows, Row{
 			Key: bucket.Project,
 			Cells: []Cell{
-				{Text: render.TruncatePath(bucket.Project, 40)},
+				{Text: bucket.Project},
 				{Text: money(bucket.Cost, bucket.Unpriced == 0), Value: bucket.Cost},
 				{Value: share},
 				{Series: bucket.Spark, Value: bucket.Cost},

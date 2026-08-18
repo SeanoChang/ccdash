@@ -61,11 +61,15 @@ func isQuit(cmd tea.Cmd) bool {
 	return ok
 }
 
-func TestQQuitsInNormalMode(t *testing.T) {
+func TestQOpensQuitConfirmationInNormalMode(t *testing.T) {
 	m := newTestModel()
-	_, cmd := m.Update(key("q"))
-	if !isQuit(cmd) {
-		t.Error("q in normal mode must quit")
+	next, cmd := m.Update(key("q"))
+	m = next.(Model)
+	if isQuit(cmd) {
+		t.Error("q in normal mode must ask for confirmation before quitting")
+	}
+	if m.mode != modeQuit {
+		t.Errorf("mode after q = %v, want modeQuit", m.mode)
 	}
 }
 

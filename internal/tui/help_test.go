@@ -300,13 +300,18 @@ func TestCtrlCQuitsWithHelpOpen(t *testing.T) {
 	}
 }
 
-// TestQQuitsWithHelpOpen holds the help to its own word: the "q ctrl-c" row
-// says its context is "any", so q has to quit with help on screen too.
-func TestQQuitsWithHelpOpen(t *testing.T) {
+// TestQConfirmsQuitWithHelpOpen holds the help to its own word: the "q ctrl-c"
+// row says its context is "any", so q has to open the same confirmation with
+// help on screen too.
+func TestQConfirmsQuitWithHelpOpen(t *testing.T) {
 	m := openHelp(t, 100, 24)
-	_, cmd := m.Update(key("q"))
-	if !isQuit(cmd) {
-		t.Error("q must quit with help open — the help row says its context is any")
+	next, cmd := m.Update(key("q"))
+	m = next.(Model)
+	if isQuit(cmd) {
+		t.Error("q must ask for confirmation with help open")
+	}
+	if m.mode != modeQuit {
+		t.Error("q must open quit confirmation with help open")
 	}
 }
 

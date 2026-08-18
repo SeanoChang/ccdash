@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -57,15 +58,82 @@ func TestProjectsViewShape(t *testing.T) {
 
 func TestProjectsViewTruncatesOnSeparator(t *testing.T) {
 	s := seedStore(t)
+	view := ProjectsView{}
 	rows, err := ProjectsView{}.Rows(s.DB(), model.DefaultPricing(), Scope{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
-		text := row.Cells[0].Text
+		text := strings.TrimSpace(formatCell(row.Cells[0], view.Columns()[0], 12, 0))
 		if strings.HasPrefix(text, "…") && !strings.HasPrefix(text, "…/") {
 			t.Errorf("truncated path %q must break on a separator", text)
 		}
+	}
+}
+
+func TestProjectsViewCostShareUsesTotalCost(t *testing.T) {
+	s, err := store.Open(t.TempDir() + "/usage.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	day := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
+	if _, err := s.UpsertRecords([]model.Record{
+		{ID: "small", Tool: model.ToolClaude, TS: day, Model: "claude-opus-5",
+			Project: "/work/small", Session: "small", OutputTok: 1_000_000},
+		{ID: "large", Tool: model.ToolClaude, TS: day, Model: "claude-opus-5",
+			Project: "/work/large", Session: "large", OutputTok: 3_000_000},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := (ProjectsView{}).Rows(s.DB(), model.DefaultPricing(), Scope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shares := make(map[string]float64, len(rows))
+	total := 0.0
+	for _, row := range rows {
+		shares[row.Key] = row.Cells[2].Value
+		total += row.Cells[2].Value
+		if row.Cells[0].Text != row.Key {
+			t.Errorf("path cell = %q, want full project path %q", row.Cells[0].Text, row.Key)
+		}
+	}
+	if math.Abs(total-1) > 1e-9 {
+		t.Errorf("cost shares sum to %.4f, want 1", total)
+	}
+	if math.Abs(shares["/work/small"]-0.25) > 1e-9 ||
+		math.Abs(shares["/work/large"]-0.75) > 1e-9 {
+		t.Errorf("shares = %#v, want small=.25 large=.75", shares)
+	}
+}
+
+func TestProjectsViewHasOnlyPathAndCostShareSortOptions(t *testing.T) {
+	entry := newEntry(ProjectsView{}, Scope{})
+	if entry.table.sortCol != 2 || !entry.table.sortDesc {
+		t.Fatalf("default sort = column %d desc=%v, want COST SHARE descending",
+			entry.table.sortCol, entry.table.sortDesc)
+	}
+	entry.table.NextSort()
+	if entry.table.sortCol != 0 || entry.table.sortDesc {
+		t.Fatalf("next sort = column %d desc=%v, want NAME ascending",
+			entry.table.sortCol, entry.table.sortDesc)
+	}
+	entry.table.NextSort()
+	if entry.table.sortCol != 2 || !entry.table.sortDesc {
+		t.Fatalf("sort cycle = column %d desc=%v, want COST SHARE descending",
+			entry.table.sortCol, entry.table.sortDesc)
+	}
+}
+
+func TestProjectsViewUsesRelativePerProjectTrendScale(t *testing.T) {
+	columns := (ProjectsView{}).Columns()
+	trend := columns[len(columns)-1]
+	if trend.Kind != CellSparkline || trend.SparkScale != SparkScaleLocal {
+		t.Fatalf("trend kind/scale = %v/%v, want sparkline/local", trend.Kind, trend.SparkScale)
+	}
+	if !strings.Contains(trend.Title, "REL") {
+		t.Errorf("relative trend scale must be labelled in the header, got %q", trend.Title)
 	}
 }
 

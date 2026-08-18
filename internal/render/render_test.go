@@ -117,6 +117,17 @@ func TestBarTrackShowsUnfilledCells(t *testing.T) {
 	}
 }
 
+func TestBarTrackMarksAnyPositiveFraction(t *testing.T) {
+	const fills = "▏▎▍▌▋▊▉█"
+	if got := BarTrack(0, 12, '·'); strings.ContainsAny(got, fills) {
+		t.Fatalf("zero bar must have no fill, got %q", got)
+	}
+	got := BarTrack(0.0001, 12, '·')
+	if !strings.ContainsAny(got, fills) {
+		t.Errorf("a positive value must retain a visible minimum tick, got %q", got)
+	}
+}
+
 func TestBarStillPadsWithSpaces(t *testing.T) {
 	// The existing Bar contract must not change.
 	got := Bar(0.5, 10)

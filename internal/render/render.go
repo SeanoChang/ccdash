@@ -28,27 +28,26 @@ func BarTrack(fraction float64, width int, track rune) string {
 	if width <= 0 {
 		return ""
 	}
-	exact := clamp01(fraction) * float64(width)
-	full := int(exact)
-	remainder := exact - float64(full)
+	fraction = clamp01(fraction)
+	totalEighths := int(math.Round(fraction * float64(width*8)))
+	// A zero-length fill is indistinguishable from no data. Preserve one
+	// eighth-cell tick for every real positive value; the adjacent numeric
+	// label remains responsible for its exact magnitude.
+	if fraction > 0 && totalEighths == 0 {
+		totalEighths = 1
+	}
+	if maximum := width * 8; totalEighths > maximum {
+		totalEighths = maximum
+	}
+	full := totalEighths / 8
+	remainder := totalEighths % 8
 	var out strings.Builder
 	for i := 0; i < full && i < width; i++ {
 		out.WriteRune('█')
 	}
 	written := full
-	if written < width {
-		index := int(remainder * 8)
-		if index < 0 {
-			index = 0
-		}
-		if index > 8 {
-			index = 8
-		}
-		if index == 0 {
-			out.WriteRune(track)
-		} else {
-			out.WriteRune(partials[index])
-		}
+	if remainder > 0 && written < width {
+		out.WriteRune(partials[remainder])
 		written++
 	}
 	for ; written < width; written++ {

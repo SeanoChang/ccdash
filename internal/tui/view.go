@@ -26,9 +26,20 @@ type CellKind int
 
 const (
 	CellText CellKind = iota
+	CellPath
 	CellNumber
 	CellBar
+	CellPercentBar
 	CellSparkline
+)
+
+// SparkScale controls whether a sparkline preserves magnitude across rows or
+// emphasizes the shape of each row independently.
+type SparkScale int
+
+const (
+	SparkScaleShared SparkScale = iota
+	SparkScaleLocal
 )
 
 // Unit is the quantity a column measures. It is only consulted when a value has
@@ -43,18 +54,19 @@ const (
 
 // Column describes one column of a resource table.
 type Column struct {
-	Title string
-	Align Alignment
-	Width int // 0 means flexible: share the remaining width
-	Sort  SortKind
-	Kind  CellKind
-	Unit  Unit
+	Title           string
+	Align           Alignment
+	Width           int // 0 means flexible: share the remaining width
+	Sort            SortKind
+	Kind            CellKind
+	Unit            Unit
+	SparkScale      SparkScale
+	DisableSort     bool
+	DefaultSortDesc bool
 }
 
-// Cell is one table cell. Text is used for CellText and CellNumber, Value for
-// sorting and for the CellBar fill, and Series for CellSparkline. Sparklines
-// are rendered by Table rather than by the view, because their domain is
-// shared across every row.
+// Cell is one table cell. Text is used for text, paths, and numbers; Value is
+// used for numeric sorting and bars; and Series is used for sparklines.
 type Cell struct {
 	Text   string
 	Value  float64
@@ -81,6 +93,12 @@ type View interface {
 	// Drill returns the view entered by pressing enter on row, along with the
 	// scope narrowing it implies, and false when the resource is a leaf.
 	Drill(row Row, scope Scope) (View, Scope, bool)
+}
+
+// DefaultSorter lets a view expose the active sort instead of relying on an
+// implicit order returned by its aggregation query.
+type DefaultSorter interface {
+	DefaultSort() (column int, descending bool)
 }
 
 // Paginator is implemented only by views whose result set is too large to hold

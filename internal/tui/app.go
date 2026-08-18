@@ -58,6 +58,7 @@ const (
 	modeNormal inputMode = iota
 	modeCommand
 	modeFilter
+	modeQuit
 )
 
 func New(st *store.Store, pricing *model.Pricing, dbPath string, root View,
@@ -74,7 +75,12 @@ func New(st *store.Store, pricing *model.Pricing, dbPath string, root View,
 // newEntry builds a stack level. pages starts at 1 so a paginated view opens
 // on its first page rather than on nothing.
 func newEntry(view View, scope Scope) stackEntry {
-	return stackEntry{view: view, scope: scope, table: NewTable(view.Columns()), pages: 1}
+	table := NewTable(view.Columns())
+	if sorter, ok := view.(DefaultSorter); ok {
+		column, descending := sorter.DefaultSort()
+		table.SetSort(column, descending)
+	}
+	return stackEntry{view: view, scope: scope, table: table, pages: 1}
 }
 
 func (m Model) current() *stackEntry {
@@ -172,7 +178,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.inFlight {
 			return m, nil
 		}
-		// Prompts pause the work but not the ticker, so it resumes on close.
+		// Prompts and modals pause the work but not the ticker, so it resumes
+		// when normal mode returns.
 		if m.mode != modeNormal {
 			return m, m.scheduleTick()
 		}
@@ -197,6 +204,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.mode == modeQuit {
+		return m.handleQuitConfirmation(message)
+	}
 	if m.mode != modeNormal {
 		return m.handlePrompt(message)
 	}
@@ -207,8 +217,11 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch message.String() {
 	// q is bound only here, in the normal-mode switch: handlePrompt consumes
 	// every key, so a q typed into a filter or command stays text.
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		return m, tea.Quit
+	case "q":
+		m.mode = modeQuit
+		return m, nil
 	case "j", "down":
 		entry.table.Move(1)
 		m.loadMore()
@@ -265,6 +278,21 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleQuitConfirmation owns every key while the modal is open. Only an
+// explicit y confirms; Enter defaults to the safe action, and Ctrl-C remains
+// an immediate escape hatch.
+func (m Model) handleQuitConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch message.String() {
+	case "ctrl+c", "y", "Y":
+		return m, tea.Quit
+	case "enter", "esc", "n", "N":
+		m.mode = modeNormal
+		return m, nil
+	default:
+		return m, nil
+	}
+}
+
 // toggleHelp pushes the help view, or pops it when it is already on top so the
 // key still reads as a toggle. Help is an ordinary view from here on: esc pops
 // it, the movement keys scroll it, "/" filters it and the border counts it,
@@ -319,7 +347,8 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 	case modeCommand:
 		if strings.EqualFold(strings.TrimSpace(input), "q") ||
 			strings.EqualFold(strings.TrimSpace(input), "quit") {
-			return m, tea.Quit
+			m.mode = modeQuit
+			return m, nil
 		}
 		view, ok := resolveCommand(input, m.registry)
 		if !ok {
@@ -412,9 +441,13 @@ func (m Model) View() string {
 			body = custom
 		}
 	}
-	return frame(headerBlock(info, m.width, m.height),
+	view := frame(headerBlock(info, m.width, m.height),
 		bodyPanel(m.bodyTitle(entry), body, m.width),
 		m.footer(), m.width, m.height)
+	if m.mode == modeQuit {
+		return overlayQuitConfirmation(view, m.width, m.height)
+	}
+	return view
 }
 
 // bodyTitle builds the border title for one stack level. The table already

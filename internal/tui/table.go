@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -162,6 +163,38 @@ func truncateDisplay(text string, width int) string {
 	return string(runes) + "…"
 }
 
+const percentLabelWidth = 6
+
+func percentLabel(value float64) string {
+	if math.IsNaN(value) || value < 0 {
+		value = 0
+	}
+	if value > 1 {
+		value = 1
+	}
+	if value > 0 && value < 0.001 {
+		return "<0.1%"
+	}
+	return fmt.Sprintf("%.1f%%", value*100)
+}
+
+// formatPercentBar keeps an exact percentage beside the gauge. The label
+// prevents a minimum visibility tick from overstating a tiny value and makes
+// every nonzero share distinguishable from zero even without color.
+func formatPercentBar(value float64, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	label := percentLabel(value)
+	if width <= percentLabelWidth {
+		label = truncateDisplay(label, width)
+		return strings.Repeat(" ", width-lipgloss.Width(label)) + label
+	}
+	barWidth := width - percentLabelWidth - 1
+	bar := render.BarTrack(value, barWidth, trackRune)
+	return bar + " " + strings.Repeat(" ", percentLabelWidth-lipgloss.Width(label)) + label
+}
+
 // formatCell renders one cell to exactly width display cells. domain is the
 // shared sparkline maximum and is ignored for other cell kinds.
 func formatCell(cell Cell, column Column, width int, domain float64) string {
@@ -172,12 +205,20 @@ func formatCell(cell Cell, column Column, width int, domain float64) string {
 	switch column.Kind {
 	case CellBar:
 		return render.BarTrack(cell.Value, width, trackRune)
+	case CellPercentBar:
+		return formatPercentBar(cell.Value, width)
+	case CellPath:
+		text = render.TruncatePath(cell.Text, width)
 	case CellSparkline:
 		series := cell.Series
 		if len(series) > width {
 			series = series[len(series)-width:]
 		}
-		text = render.SparklineDomain(series, 0, domain)
+		if column.SparkScale == SparkScaleLocal {
+			text = render.Sparkline(series)
+		} else {
+			text = render.SparklineDomain(series, 0, domain)
+		}
 	default:
 		text = cell.Text
 	}
@@ -257,16 +298,33 @@ func (t *Table) SetFilter(filter string) {
 	t.clampViewport()
 }
 
+// SetSort activates an explicit sort. Views use this to make their meaningful
+// default ordering visible instead of depending on an unmarked query order.
+func (t *Table) SetSort(column int, descending bool) {
+	if column < 0 || column >= len(t.columns) || t.columns[column].DisableSort {
+		return
+	}
+	t.sortCol = column
+	t.sortDesc = descending
+	t.sorted = true
+	t.apply()
+	t.clampSelection()
+	t.clampViewport()
+}
+
 // NextSort advances to the next sortable column, wrapping around.
 func (t *Table) NextSort() {
 	if len(t.columns) == 0 {
 		return
 	}
-	t.sortCol = (t.sortCol + 1) % len(t.columns)
-	t.sortDesc = false
-	t.sorted = true
-	t.apply()
-	t.clampSelection()
+	for step := 1; step <= len(t.columns); step++ {
+		candidate := (t.sortCol + step) % len(t.columns)
+		if t.columns[candidate].DisableSort {
+			continue
+		}
+		t.SetSort(candidate, t.columns[candidate].DefaultSortDesc)
+		return
+	}
 }
 
 func (t *Table) ReverseSort() {
@@ -370,17 +428,25 @@ func (t *Table) apply() {
 			if index >= len(left.Cells) || index >= len(right.Cells) {
 				return false
 			}
-			var less bool
+			comparison := 0
 			switch column.Sort {
 			case SortNumeric, SortTime:
-				less = left.Cells[index].Value < right.Cells[index].Value
+				leftValue, rightValue := left.Cells[index].Value, right.Cells[index].Value
+				if leftValue < rightValue {
+					comparison = -1
+				} else if leftValue > rightValue {
+					comparison = 1
+				}
 			default:
-				less = left.Cells[index].Text < right.Cells[index].Text
+				comparison = strings.Compare(left.Cells[index].Text, right.Cells[index].Text)
+			}
+			if comparison == 0 {
+				return false
 			}
 			if t.sortDesc {
-				return !less
+				return comparison > 0
 			}
-			return less
+			return comparison < 0
 		})
 	}
 }
@@ -435,7 +501,7 @@ func (t *Table) Render() []string {
 	widths := computeWidths(t.columns, t.visible, t.width)
 	domains := make([]float64, len(t.columns))
 	for i, column := range t.columns {
-		if column.Kind == CellSparkline {
+		if column.Kind == CellSparkline && column.SparkScale == SparkScaleShared {
 			domains[i] = sparkDomain(t.visible, i)
 		}
 	}
@@ -450,7 +516,7 @@ func (t *Table) Render() []string {
 			}
 			title = truncateDisplay(title+marker, widths[i])
 		}
-		if column.Kind == CellSparkline {
+		if column.Kind == CellSparkline && column.SparkScale == SparkScaleShared {
 			title = sparkHeader(title, domains[i], column.Unit, widths[i])
 		}
 		header = append(header, formatCell(Cell{Text: title},
