@@ -256,6 +256,35 @@ func TestRenderReturnsExactlyHeightLines(t *testing.T) {
 	}
 }
 
+// TestOneLineViewportSpendsItsLineOnARow covers the tightest body the frame
+// ever hands a table — a four-row terminal leaves exactly one interior line. At
+// that size the column header is dropped and the line goes to data: a row of
+// labels there tells the reader nothing, and a row tells them something. This
+// is what makes every row of a table reachable by scrolling at any height the
+// frame can draw a body at.
+func TestOneLineViewportSpendsItsLineOnARow(t *testing.T) {
+	table := testTable(numericRows(5))
+	table.SetSize(40, 1)
+	lines := table.Render()
+	if len(lines) != 1 {
+		t.Fatalf("got %d lines, want exactly 1", len(lines))
+	}
+	if lipgloss.Width(lines[0]) != 40 {
+		t.Errorf("line width = %d, want 40", lipgloss.Width(lines[0]))
+	}
+	if strings.Contains(lines[0], "NAME") {
+		t.Errorf("a one-line body must not spend its only line on the column header: %q",
+			lines[0])
+	}
+	if !strings.HasPrefix(lines[0], "a") {
+		t.Errorf("a one-line body shows the selected row, got %q", lines[0])
+	}
+	table.End()
+	if last := table.Render(); !strings.HasPrefix(last[0], "e") {
+		t.Errorf("scrolling must reach the last row in a one-line body, got %q", last[0])
+	}
+}
+
 func TestViewportFollowsSelection(t *testing.T) {
 	table := testTable(numericRows(20))
 	table.SetSize(40, 5) // header + 4 body rows

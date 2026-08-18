@@ -91,6 +91,15 @@ type Paginator interface {
 	PageSize() int
 }
 
+// Unscoped is implemented by a view the scope does not narrow. Its border
+// title carries the count with no "(scope)" parenthesis, because a title
+// reading Help(claude) would advertise a filter the body never applied — the
+// same lie the Limits pane told in 77a23ea, in a different place. Only
+// HelpView implements it.
+type Unscoped interface {
+	UnscopedTitle() bool
+}
+
 // Renderer is implemented by views that paint their own body instead of a
 // table. App checks for it before falling back to Table. Only PulseView
 // implements it.

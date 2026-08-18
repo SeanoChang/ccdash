@@ -48,10 +48,6 @@ type Model struct {
 	mode  inputMode
 	input string
 
-	// showHelp replaces the body with the keybinding overlay. Any key dismisses
-	// it, so it is never sticky.
-	showHelp bool
-
 	registry   map[string]func() View
 	commandErr string
 }
@@ -201,16 +197,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// The help overlay is dismissed by any key, and that key is swallowed: the
-	// keystroke that closes the overlay must not also act on the table beneath
-	// it. ctrl+c still quits, per spec §5.5's "any" context.
-	if m.showHelp {
-		if message.Type == tea.KeyCtrlC {
-			return m, tea.Quit
-		}
-		m.showHelp = false
-		return m, nil
-	}
 	if m.mode != modeNormal {
 		return m.handlePrompt(message)
 	}
@@ -274,8 +260,21 @@ func (m Model) handleKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		m.input = ""
 	case "?":
-		m.showHelp = true
+		return m.toggleHelp()
 	}
+	return m, nil
+}
+
+// toggleHelp pushes the help view, or pops it when it is already on top so the
+// key still reads as a toggle. Help is an ordinary view from here on: esc pops
+// it, the movement keys scroll it, "/" filters it and the border counts it,
+// none of which is code this file carries.
+func (m Model) toggleHelp() (tea.Model, tea.Cmd) {
+	if _, open := m.current().view.(HelpView); open {
+		return m.pop()
+	}
+	m.stack = append(m.stack, newEntry(HelpView{}, m.scope))
+	m.reloadCurrent()
 	return m, nil
 }
 
@@ -406,34 +405,33 @@ func (m Model) View() string {
 		Unpriced: fmt.Sprintf("%d", m.unpriced),
 	}
 	interior, height := bodyWidth(m.width), bodyHeight(m.height)
-	var body []string
-	// The overlay is not a resource, so it borrows the border but not the
-	// resource title — a row count there would be a count of nothing.
-	title := "Help"
-	if m.showHelp {
-		body = helpBody(interior, height)
-	} else {
-		body = entry.table.Render()
-		if renderer, ok := entry.view.(Renderer); ok {
-			if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
-				interior, height); err == nil {
-				body = custom
-			}
+	body := entry.table.Render()
+	if renderer, ok := entry.view.(Renderer); ok {
+		if custom, err := renderer.Body(m.db(), m.pricing, entry.scope,
+			interior, height); err == nil {
+			body = custom
 		}
-		title = m.bodyTitle(entry)
 	}
-	return frame(headerBlock(info, m.width, m.height), bodyPanel(title, body, m.width),
+	return frame(headerBlock(info, m.width, m.height),
+		bodyPanel(m.bodyTitle(entry), body, m.width),
 		m.footer(), m.width, m.height)
 }
 
 // bodyTitle builds the border title for one stack level. The table already
 // holds both counts the title needs: everything loaded, and everything the
-// filter left visible.
+// filter left visible. A view the scope does not narrow says so by omitting the
+// parenthesis rather than by printing "(all)", which would claim a filter it
+// never applied.
 func (m Model) bodyTitle(entry *stackEntry) string {
 	_, rendered := entry.view.(Renderer)
+	filtered := entry.table.Filter() != ""
+	if view, ok := entry.view.(Unscoped); ok && view.UnscopedTitle() {
+		return unscopedBodyTitle(entry.view.Title(), entry.table.VisibleCount(),
+			entry.table.TotalCount(), filtered, entry.more)
+	}
 	return bodyTitle(entry.view.Title(), scopeLabel(entry.scope),
 		entry.table.VisibleCount(), entry.table.TotalCount(),
-		entry.table.Filter() != "", entry.more, rendered)
+		filtered, entry.more, rendered)
 }
 
 func (m Model) rangeText() string {
@@ -454,9 +452,6 @@ func (m Model) footer() string {
 	}
 	left := m.breadcrumb()
 	right := m.styledRefreshAge() + "   [enter] drill  [s]ort  [/]filter  [:]cmd  [?]help"
-	if m.showHelp {
-		right = m.styledRefreshAge() + "   any key dismisses"
-	}
 	if m.commandErr != "" {
 		right = m.styledRefreshAge() + "   " + styleWarning.Render(m.commandErr)
 	}

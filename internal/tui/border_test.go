@@ -173,16 +173,17 @@ func TestHeaderBodyAndFooterAreFlush(t *testing.T) {
 	}
 }
 
-func TestHelpOverlayKeepsTheBodyBorder(t *testing.T) {
+func TestHelpKeepsTheBodyBorder(t *testing.T) {
 	m := newTestModel()
 	next, _ := m.Update(key("?"))
 	m = next.(Model)
 	out := stripANSI(m.View())
 	if !strings.Contains(out, "┌") || !strings.Contains(out, "└") {
-		t.Error("the help overlay replaces the body content, not the body border")
+		t.Error("help replaces the body content, not the body border")
 	}
 	if strings.Contains(out, "Root(all)") {
-		t.Error("the overlay is not the resource, so it must not claim the resource title")
+		t.Error("help is on top of the stack, so the border must not still name the " +
+			"resource underneath it")
 	}
 }
 

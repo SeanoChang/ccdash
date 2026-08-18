@@ -10,211 +10,404 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// helpDocuments reports whether out documents this binding: some line carries
-// its keys, then its context, then its action — the action possibly cut short
-// with an ellipsis where the column was too narrow to hold all of it.
-func helpDocuments(out string, binding helpBinding) bool {
-	pattern := regexp.MustCompile(regexp.QuoteMeta(binding.keys) + ` +` +
-		regexp.QuoteMeta(binding.context) + ` +(.*)`)
-	for _, line := range strings.Split(stripANSI(out), "\n") {
-		match := pattern.FindStringSubmatch(line)
-		if match == nil {
-			continue
-		}
-		rest := match[1]
-		if strings.HasPrefix(rest, binding.action) {
-			return true
-		}
-		// A squeezed column shows a prefix of the action and marks the cut.
-		if cut := strings.Index(rest, "…"); cut > 0 &&
-			strings.HasPrefix(binding.action, rest[:cut]) {
-			return true
-		}
-	}
-	return false
-}
-
-// openHelpAt returns the full frame with the overlay up at this viewport size.
-func openHelpAt(t *testing.T, width, height int) string {
+// openHelp opens the help view on a model sized to this viewport, and checks it
+// arrived on the view stack as an ordinary view rather than as an overlay flag:
+// everything else in this file — scrolling, filtering, esc, the border title —
+// follows from that and from nothing written specially for help.
+func openHelp(t *testing.T, width, height int) Model {
 	t.Helper()
 	m := newTestModel()
 	next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	m = next.(Model)
-	next, _ = m.Update(key("?"))
-	m = next.(Model)
-	out := m.View()
-	assertExactFrame(t, out, width, height)
-	return out
-}
-
-// TestHelpOverlayDocumentsEveryBindingAtRealWidths is the point of the columns:
-// at any width a terminal is actually run at, the overlay shows the whole
-// keymap. A single column needs one row per binding and so silently loses its
-// tail — including both ways to quit — on anything shorter than 24 rows.
-func TestHelpOverlayDocumentsEveryBindingAtRealWidths(t *testing.T) {
-	for _, size := range []struct{ w, h int }{{177, 58}, {100, 20}, {80, 24}, {200, 60}} {
-		out := openHelpAt(t, size.w, size.h)
-		for _, binding := range helpBindings {
-			if !helpDocuments(out, binding) {
-				t.Errorf("%dx%d: overlay does not document %q %q %q",
-					size.w, size.h, binding.keys, binding.context, binding.action)
-			}
-		}
-		if strings.Contains(stripANSI(out), " more") {
-			t.Errorf("%dx%d: overlay claims bindings are omitted, but they all fit",
-				size.w, size.h)
-		}
-	}
-}
-
-// TestHelpOverlayKeepsQuitAndOwnsUpWhenCramped pins the two rules that make
-// truncation honest: the ways out are never the rows that get dropped, and
-// whatever is dropped is counted on screen rather than vanishing.
-func TestHelpOverlayKeepsQuitAndOwnsUpWhenCramped(t *testing.T) {
-	out := stripANSI(openHelpAt(t, 40, 10))
-	for _, binding := range helpBindings {
-		if binding.action != "Quit" {
-			continue
-		}
-		if !helpDocuments(out, binding) {
-			t.Errorf("a cramped overlay dropped %q → Quit, the one row a stuck "+
-				"reader opened it for", binding.keys)
-		}
-	}
-	missing := 0
-	for _, binding := range helpBindings {
-		if !helpDocuments(out, binding) {
-			missing++
-		}
-	}
-	if missing == 0 {
-		t.Fatal("40x10 was chosen because it cannot hold every binding; it now can, " +
-			"so this test no longer exercises truncation")
-	}
-	if want := fmt.Sprintf("… %d more", missing); !strings.Contains(out, want) {
-		t.Errorf("overlay omits %d bindings without saying so; want %q", missing, want)
-	}
-}
-
-// TestHelpOverlayFillsColumnsTopToBottom checks the grid is column-major: the
-// binding after the first sits below it, not beside it, so each column reads
-// down like the single-column list it replaced.
-func TestHelpOverlayFillsColumnsTopToBottom(t *testing.T) {
-	lines := helpBody(bodyWidth(177), bodyHeight(58))
-	widest := 0
-	for _, line := range lines {
-		perLine := 0
-		for _, binding := range helpBindings {
-			if helpDocuments(line, binding) {
-				perLine++
-			}
-		}
-		if perLine > widest {
-			widest = perLine
-		}
-		if helpDocuments(line, helpBindings[0]) && helpDocuments(line, helpBindings[1]) {
-			t.Error("the grid is filled row-major: binding 2 sits beside binding 1, " +
-				"so no column reads top to bottom")
-		}
-	}
-	if widest < 2 {
-		t.Errorf("177 cells afford several columns; the widest row holds %d binding(s)",
-			widest)
-	}
-}
-
-func TestQuestionMarkOpensTheHelpOverlay(t *testing.T) {
-	m := newTestModel()
 	next, cmd := m.Update(key("?"))
 	m = next.(Model)
 	if cmd != nil {
 		t.Error("? must not emit a command")
 	}
-	if !m.showHelp {
-		t.Fatal("? must open the help overlay — both the header and the footer advertise it")
+	if len(m.stack) != 2 {
+		t.Fatalf("? left the stack %d deep, want 2: help is pushed, not flagged",
+			len(m.stack))
 	}
-	out := m.View()
-	if !strings.Contains(out, "Keybindings") {
-		t.Error("the help overlay must be rendered as the body")
+	if _, ok := m.current().view.(HelpView); !ok {
+		t.Fatalf("? pushed %T, want HelpView", m.current().view)
 	}
-	// The overlay replaces the table, so table content must be gone.
-	if strings.Contains(out, "alpha") {
-		t.Error("the help overlay must replace the table body, not sit beside it")
+	return m
+}
+
+// panelRows is the interior of the body panel in a rendered frame: the lines
+// between the top border and the bottom border, stripped of colour and of the
+// border cell either side. A frame with no room for an interior row yields
+// none, which is a fact about the frame rather than about the help.
+func panelRows(frame string) []string {
+	lines := strings.Split(frame, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.HasPrefix(stripANSI(line), "┌") {
+			start = i + 1
+			break
+		}
+	}
+	if start < 0 {
+		return nil
+	}
+	end := len(lines) - footerLines
+	for i := start; i < len(lines); i++ {
+		if strings.HasPrefix(stripANSI(lines[i]), "└") {
+			end = i
+			break
+		}
+	}
+	rows := make([]string, 0, max(end-start, 0))
+	for i := start; i < end; i++ {
+		rows = append(rows, strings.Trim(stripANSI(lines[i]), "│"))
+	}
+	return rows
+}
+
+// helpFieldPattern matches one field of a drawn help row: the text whole, or
+// any non-empty prefix of it followed by the cut mark, which is what a column
+// too narrow to hold the field draws. Nothing else counts — a field cut without
+// a mark would be the reader misinformed rather than merely short-changed.
+func helpFieldPattern(text string) string {
+	alternatives := []string{regexp.QuoteMeta(text)}
+	runes := []rune(text)
+	for n := len(runes) - 1; n >= 1; n-- {
+		alternatives = append(alternatives, regexp.QuoteMeta(string(runes[:n]))+"…")
+	}
+	return "(?:" + strings.Join(alternatives, "|") + ")"
+}
+
+// helpRowPattern matches a rendered row that documents these fields, in order,
+// from the start of the line. Fields beyond the ones asked for are not looked
+// at, so a viewport with no cells left for the action still documents a binding
+// by its keys and its context.
+func helpRowPattern(fields ...string) *regexp.Regexp {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, helpFieldPattern(field))
+	}
+	return regexp.MustCompile(`^` + strings.Join(parts, ` +`))
+}
+
+// helpScrolled collects every interior row the help view draws while the
+// selection is walked from the first row to the last, and asserts the frame is
+// exactly width × height at every step. Nothing is dropped by a scrolling
+// table, so "reachable" means "seen in this collection".
+func helpScrolled(t *testing.T, width, height int) []string {
+	t.Helper()
+	m := openHelp(t, width, height)
+	seen := []string{}
+	step := func() {
+		out := m.View()
+		assertExactFrame(t, out, width, height)
+		for i, row := range panelRows(out) {
+			if got := lipgloss.Width(row); got != bodyWidth(width) {
+				t.Errorf("%dx%d: interior row %d is %d cells, want exactly %d: %q",
+					width, height, i, got, bodyWidth(width), row)
+			}
+			seen = append(seen, row)
+		}
+	}
+	step()
+	// One press per row is enough to walk the whole table from the top, however
+	// few rows the viewport shows at once.
+	for i := 0; i < len(helpRows()); i++ {
+		next, _ := m.Update(key("j"))
+		m = next.(Model)
+		step()
+	}
+	return seen
+}
+
+// helpViewportSizes are the viewports the help must hold the whole keymap at,
+// written width × height throughout. The first three are ordinary terminals.
+// The rest are the sizes an adversarial pty sweep caught the old overlay
+// failing at — recorded rows-first there, transposed here — plus the transpose
+// of every size wide enough for one, which is the same list read the other way
+// round.
+//
+// Widths below about ten cells are deliberately absent: three columns and two
+// gutters cannot spell any binding in six cells, so no layout — this one or the
+// search it replaces — can reach one there, and a test demanding it would be
+// demanding the impossible.
+var helpViewportSizes = []struct {
+	w, h int
+	// noBodyRow marks a frame whose header, border and footer consume every
+	// line it has, leaving the body none. The test asserts this is still true
+	// rather than taking it on trust: if the frame ever gains a row here, the
+	// flag has to come off and reachability has to be asserted instead.
+	noBodyRow bool
+}{
+	{w: 177, h: 58}, {w: 58, h: 177},
+	{w: 100, h: 20}, {w: 20, h: 100},
+	{w: 80, h: 24}, {w: 24, h: 80},
+	{w: 20, h: 60}, {w: 60, h: 20},
+	{w: 16, h: 40}, {w: 40, h: 16},
+	{w: 20, h: 24}, {w: 24, h: 20},
+	{w: 30, h: 8},
+	{w: 120, h: 7},
+	{w: 177, h: 5},
+	{w: 120, h: 4},
+	{w: 20, h: 3, noBodyRow: true},
+}
+
+// TestHelpReachesEveryRowAtEverySize is the property the layout search kept
+// failing to hold and a scrolling table holds by construction: nothing is ever
+// dropped, so every row of the keymap can be reached at every size — at once
+// where the viewport is roomy, and by scrolling where it is not. The frame
+// stays exactly width × height throughout.
+func TestHelpReachesEveryRowAtEverySize(t *testing.T) {
+	for _, size := range helpViewportSizes {
+		t.Run(fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
+			m := openHelp(t, size.w, size.h)
+			assertExactFrame(t, m.View(), size.w, size.h)
+			if size.noBodyRow {
+				if rows := panelRows(m.View()); len(rows) != 0 {
+					t.Fatalf("this size is marked as having no interior row, but the "+
+						"frame gives it %d: drop the flag and assert reachability", len(rows))
+				}
+				t.Skipf("a %d-row frame spends every line on the collapsed header, the "+
+					"body's top border and the footer, so it has no interior row for a "+
+					"binding to be reached in; frame exactness is asserted above",
+					size.h)
+			}
+			seen := helpScrolled(t, size.w, size.h)
+			for _, row := range helpRows() {
+				keys, context := row.Cells[0].Text, row.Cells[1].Text
+				pattern := helpRowPattern(keys, context)
+				found := false
+				for _, line := range seen {
+					if pattern.MatchString(line) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("scrolling the whole table never reached %q %q; %d rows seen:\n%s",
+						keys, context, len(seen), strings.Join(seen, "\n"))
+				}
+			}
+		})
 	}
 }
 
-// TestHelpOverlayListsEveryBinding pins the overlay to spec §5.5: every key the
-// application binds has to appear, or the overlay is lying about the keymap.
-func TestHelpOverlayListsEveryBinding(t *testing.T) {
-	m := newTestModel()
-	next, _ := m.Update(key("?"))
-	m = next.(Model)
-	out := m.View()
+// TestHelpDocumentsEveryRowInFullOnARealTerminal is the other half: at a size
+// anyone actually runs, no field is cut at all — the keys, the context and the
+// whole action text are on screen, spelled out.
+func TestHelpDocumentsEveryRowInFullOnARealTerminal(t *testing.T) {
+	for _, size := range []struct{ w, h int }{{177, 58}, {100, 20}, {80, 24}, {200, 60}} {
+		seen := helpScrolled(t, size.w, size.h)
+		for _, row := range helpRows() {
+			keys, context, action := row.Cells[0].Text, row.Cells[1].Text, row.Cells[2].Text
+			want := regexp.MustCompile(`^` + regexp.QuoteMeta(keys) + ` +` +
+				regexp.QuoteMeta(context) + ` +` + regexp.QuoteMeta(action))
+			found := false
+			for _, line := range seen {
+				if want.MatchString(line) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%dx%d: %q %q %q is not documented in full", size.w, size.h,
+					keys, context, action)
+			}
+		}
+	}
+}
+
+// TestHelpListsEverySpecBinding pins the help to spec §5.5: every key the
+// application binds appears, or the help is lying about the keymap.
+func TestHelpListsEverySpecBinding(t *testing.T) {
+	seen := strings.Join(helpScrolled(t, 100, 24), "\n")
 	for _, want := range []string{
-		"j", "k", "ctrl-f", "ctrl-b", "g", "G", "enter", "esc", "s", "S",
-		"/", ":", "r", "1 2 3", "d w m a", "?", "q", "ctrl-c", ":q",
+		"j k ↓ ↑", "ctrl-f ctrl-b", "g G", "enter", "esc", "s S",
+		"/", ":", "r", "1 2 3", "d w m a", "?", "q ctrl-c", ":q",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("help overlay does not document %q", want)
+		if !strings.Contains(seen, want) {
+			t.Errorf("help does not document %q", want)
 		}
 	}
 	for _, want := range []string{"Quit", "Move selection one row", "Open the filter prompt"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("help overlay is missing the action text %q", want)
+		if !strings.Contains(seen, want) {
+			t.Errorf("help is missing the action text %q", want)
 		}
 	}
 }
 
-func TestAnyKeyDismissesTheHelpOverlay(t *testing.T) {
-	for _, dismiss := range []string{"j", "?", "q", "x", "enter", "esc"} {
-		m := newTestModel()
-		next, _ := m.Update(key("?"))
-		m = next.(Model)
-		next, cmd := m.Update(key(dismiss))
-		m = next.(Model)
-		if m.showHelp {
-			t.Errorf("%q must dismiss the help overlay", dismiss)
+// TestHelpRowsAreTheKeymapPlusTheCommands keeps the data honest: one row per
+// spec §5.5 binding, one per command the prompt accepts, and a distinct key on
+// each so the table can hold the selection across a refresh.
+func TestHelpRowsAreTheKeymapPlusTheCommands(t *testing.T) {
+	if len(helpBindings) != 15 {
+		t.Errorf("spec §5.5 lists 15 bindings; helpBindings has %d", len(helpBindings))
+	}
+	rows := helpRows()
+	if want := len(helpBindings) + len(helpCommands); len(rows) != want {
+		t.Fatalf("helpRows() = %d rows, want %d", len(rows), want)
+	}
+	keys := map[string]bool{}
+	for _, row := range rows {
+		if len(row.Cells) != 3 {
+			t.Fatalf("row %q has %d cells, want KEYS/CONTEXT/ACTION", row.Key, len(row.Cells))
 		}
-		if isQuit(cmd) {
-			t.Errorf("%q dismisses the overlay; it must not also quit", dismiss)
+		if keys[row.Key] {
+			t.Errorf("duplicate row key %q: the table anchors the selection on it", row.Key)
 		}
-		// The dismissing key is swallowed: it must not act on the table under
-		// the overlay.
-		if m.current().table.selected != 0 {
-			t.Errorf("%q moved the selection while dismissing the overlay", dismiss)
-		}
-		if len(m.stack) != 1 {
-			t.Errorf("%q navigated while dismissing the overlay", dismiss)
-		}
+		keys[row.Key] = true
 	}
 }
 
-func TestCtrlCQuitsWithTheHelpOverlayUp(t *testing.T) {
-	m := newTestModel()
-	next, _ := m.Update(key("?"))
+// TestQuestionMarkTogglesTheHelpView: "?" pushes, "?" pops. The key still reads
+// as a toggle even though it is now navigation.
+func TestQuestionMarkTogglesTheHelpView(t *testing.T) {
+	m := openHelp(t, 100, 24)
+	next, cmd := m.Update(key("?"))
 	m = next.(Model)
+	if isQuit(cmd) {
+		t.Error("? must not quit")
+	}
+	if len(m.stack) != 1 {
+		t.Fatalf("a second ? left the stack %d deep, want 1", len(m.stack))
+	}
+	if _, ok := m.current().view.(HelpView); ok {
+		t.Error("a second ? must pop the help view")
+	}
+	// The table underneath is intact: the key that closed help did not also act
+	// on it.
+	if got := m.current().table.TotalCount(); got != 2 {
+		t.Errorf("the view under help has %d rows, want its own 2", got)
+	}
+}
+
+func TestEscClosesTheHelpView(t *testing.T) {
+	m := openHelp(t, 100, 24)
+	next, cmd := m.Update(key("esc"))
+	m = next.(Model)
+	if isQuit(cmd) {
+		t.Error("esc must not quit")
+	}
+	if len(m.stack) != 1 {
+		t.Errorf("esc left the stack %d deep, want 1", len(m.stack))
+	}
+}
+
+func TestCtrlCQuitsWithHelpOpen(t *testing.T) {
+	m := openHelp(t, 100, 24)
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if !isQuit(cmd) {
-		t.Error("ctrl+c must quit even with the help overlay up")
+		t.Error("ctrl+c must quit from anywhere, help included")
 	}
 }
 
-func TestHelpOverlayKeepsTheFrameExact(t *testing.T) {
-	for _, size := range []struct{ w, h int }{
-		{80, 24}, {200, 60}, {40, 10}, {177, 58}, {100, 20}, {30, 8},
+// TestQQuitsWithHelpOpen holds the help to its own word: the "q ctrl-c" row
+// says its context is "any", so q has to quit with help on screen too.
+func TestQQuitsWithHelpOpen(t *testing.T) {
+	m := openHelp(t, 100, 24)
+	_, cmd := m.Update(key("q"))
+	if !isQuit(cmd) {
+		t.Error("q must quit with help open — the help row says its context is any")
+	}
+}
+
+// TestHelpScrollsInsteadOfDismissing is the interaction the old overlay could
+// not offer: the movement keys move within help rather than closing it.
+func TestHelpScrollsInsteadOfDismissing(t *testing.T) {
+	m := openHelp(t, 80, 24)
+	for _, message := range []tea.KeyMsg{
+		key("j"), key("j"), key("k"),
+		{Type: tea.KeyCtrlF}, {Type: tea.KeyCtrlB},
 	} {
-		m := newTestModel()
-		next, _ := m.Update(tea.WindowSizeMsg{Width: size.w, Height: size.h})
+		next, cmd := m.Update(message)
 		m = next.(Model)
-		next, _ = m.Update(key("?"))
-		m = next.(Model)
-		assertExactFrame(t, m.View(), size.w, size.h)
+		if isQuit(cmd) {
+			t.Fatalf("%v quit", message)
+		}
+		if len(m.stack) != 2 {
+			t.Fatalf("%v closed the help view", message)
+		}
+	}
+	if got := m.current().table.selected; got != 1 {
+		t.Errorf("j j k left the selection on row %d, want 1", got)
+	}
+	next, _ := m.Update(key("G"))
+	m = next.(Model)
+	if got, want := m.current().table.selected, len(helpRows())-1; got != want {
+		t.Errorf("G left the selection on row %d, want the last row %d", got, want)
+	}
+	next, _ = m.Update(key("g"))
+	m = next.(Model)
+	if got := m.current().table.selected; got != 0 {
+		t.Errorf("g left the selection on row %d, want the first", got)
+	}
+	if len(m.stack) != 2 {
+		t.Error("g and G must not close the help view")
 	}
 }
 
-// TestHelpCommandsMatchRegistry catches drift in both directions: a command the
-// overlay advertises but the registry cannot resolve, and a view added to the
-// registry that the overlay never mentions.
+// TestHelpFilterNarrowsTheKeymap: "/" filters help the same way it filters any
+// other resource, and the border title reports visible over total.
+func TestHelpFilterNarrowsTheKeymap(t *testing.T) {
+	m := openHelp(t, 100, 24)
+	next, _ := m.Update(key("/"))
+	m = next.(Model)
+	for _, r := range []string{"e", "s", "c"} {
+		next, _ = m.Update(key(r))
+		m = next.(Model)
+	}
+	next, _ = m.Update(key("enter"))
+	m = next.(Model)
+	if got := m.current().table.VisibleCount(); got != 2 {
+		t.Errorf("filtering help on \"esc\" left %d rows, want the 2 esc bindings", got)
+	}
+	want := fmt.Sprintf("Help[2/%d]", len(helpRows()))
+	if got := m.bodyTitle(m.current()); got != want {
+		t.Errorf("filtered help title = %q, want %q", got, want)
+	}
+}
+
+// TestHelpTitleClaimsNoScope is the title-honesty rule of 77a23ea in its second
+// form: help is not narrowed by the tool filter, the range or a drill-down, so
+// its border title must not render a scope it never applied. Help[N], never
+// Help(all)[N] and never Help(claude)[N].
+func TestHelpTitleClaimsNoScope(t *testing.T) {
+	want := fmt.Sprintf("Help[%d]", len(helpRows()))
+	m := openHelp(t, 100, 24)
+	for _, press := range []string{"", "2", "3", "d", "w", "1", "a"} {
+		if press != "" {
+			next, _ := m.Update(key(press))
+			m = next.(Model)
+		}
+		got := m.bodyTitle(m.current())
+		if got != want {
+			t.Errorf("after %q the help title = %q, want %q", press, got, want)
+		}
+		if strings.ContainsAny(got, "()") {
+			t.Errorf("help title %q carries a scope it does not apply", got)
+		}
+		if !strings.Contains(stripANSI(m.View()), want) {
+			t.Errorf("the rendered border does not carry %q", want)
+		}
+	}
+}
+
+// TestHelpIsALeaf: enter on a help row goes nowhere, so the stack cannot grow
+// under the reader.
+func TestHelpIsALeaf(t *testing.T) {
+	m := openHelp(t, 100, 24)
+	next, _ := m.Update(key("enter"))
+	m = next.(Model)
+	if len(m.stack) != 2 {
+		t.Errorf("enter on a help row changed the stack depth to %d", len(m.stack))
+	}
+	if _, _, ok := (HelpView{}).Drill(helpRows()[0], Scope{}); ok {
+		t.Error("HelpView.Drill must report false: the keymap has nothing to drill into")
+	}
+}
+
+// TestHelpCommandsMatchRegistry catches drift in both directions: a command help
+// advertises but the registry cannot resolve, and a view added to the registry
+// that help never mentions.
 func TestHelpCommandsMatchRegistry(t *testing.T) {
 	registry := DefaultRegistry()
 	listed := map[string]bool{}
@@ -228,219 +421,30 @@ func TestHelpCommandsMatchRegistry(t *testing.T) {
 	}
 	for name, build := range registry {
 		if title := build().Title(); !listed[title] {
-			t.Errorf("registry command :%s opens %s, which the help overlay never mentions",
-				name, title)
+			t.Errorf("registry command :%s opens %s, which help never mentions", name, title)
+		}
+	}
+	// Every advertised command is a row of the table, so it is discoverable
+	// without the reader having to guess that a hint line exists.
+	seen := strings.Join(helpScrolled(t, 100, 24), "\n")
+	for _, name := range helpCommands {
+		if !strings.Contains(seen, ":"+name) {
+			t.Errorf("help does not draw a row for :%s", name)
 		}
 	}
 }
 
-func TestHelpBodyIsExactlySized(t *testing.T) {
-	for _, size := range []struct{ w, h int }{{80, 19}, {40, 1}, {200, 55}} {
-		lines := helpBody(size.w, size.h)
-		if len(lines) != size.h {
-			t.Fatalf("helpBody(%d,%d) = %d lines, want %d",
-				size.w, size.h, len(lines), size.h)
-		}
-	}
-}
-
-// key() only knows a few named keys; the overlay test above uses "x" as an
-// arbitrary unbound rune, which must still dismiss.
-func TestHelpOverlayDoesNotLeakIntoPrompts(t *testing.T) {
+// TestHelpDoesNotLeakIntoPrompts: "?" inside a prompt is text, not a binding.
+func TestHelpDoesNotLeakIntoPrompts(t *testing.T) {
 	m := newTestModel()
 	next, _ := m.Update(key("/"))
 	m = next.(Model)
 	next, _ = m.Update(key("?"))
 	m = next.(Model)
-	if m.showHelp {
+	if len(m.stack) != 1 {
 		t.Error("? inside a prompt is text, not a binding")
 	}
 	if m.input != "?" {
 		t.Errorf("input = %q, want \"?\"", m.input)
-	}
-}
-
-// helpKeysOnLine reports the key strings this line draws as bindings. A row
-// draws one when its keys stand as a whole field — at the row's start or after
-// a column gutter, and followed by padding or the row's end — which is what
-// keeps the "/" inside "Page down / up", the ":" inside ":projects" and the "r"
-// inside "Manual refresh now" from being counted as bindings.
-func helpKeysOnLine(line string) []string {
-	plain := stripANSI(line)
-	drawn, seen := []string{}, map[string]bool{}
-	for _, binding := range helpBindings {
-		if seen[binding.keys] {
-			continue
-		}
-		pattern := regexp.MustCompile(`(?:^|\s{2,})` +
-			regexp.QuoteMeta(binding.keys) + `(?:\s|$)`)
-		if pattern.MatchString(plain) {
-			seen[binding.keys] = true
-			drawn = append(drawn, binding.keys)
-		}
-	}
-	return drawn
-}
-
-// helpKeysDrawn is every key string the body draws, plus the index of the first
-// line that draws any: the row the ways out have to be on once the overlay is
-// dropping bindings. The two "esc" rows share a key string, so a complete
-// overlay draws helpKeyStrings() of them, not len(helpBindings).
-func helpKeysDrawn(body []string) (map[string]bool, int) {
-	drawn, first := map[string]bool{}, -1
-	for i, line := range body {
-		keys := helpKeysOnLine(line)
-		if len(keys) > 0 && first < 0 {
-			first = i
-		}
-		for _, k := range keys {
-			drawn[k] = true
-		}
-	}
-	return drawn, first
-}
-
-// helpKeyStrings is how many distinct key strings the keymap has.
-func helpKeyStrings() int {
-	seen := map[string]bool{}
-	for _, binding := range helpBindings {
-		seen[binding.keys] = true
-	}
-	return len(seen)
-}
-
-// helpOwnsUp reports whether this text counts the bindings it is not showing,
-// in either the roomy form or the folded one.
-func helpOwnsUp(text string) bool {
-	plain := stripANSI(text)
-	return regexp.MustCompile(`… \d+ more`).MatchString(plain) ||
-		regexp.MustCompile(`\+\d+`).MatchString(plain)
-}
-
-func helpDump(body []string) string {
-	shown := make([]string, 0, len(body))
-	for _, line := range body {
-		shown = append(shown, "|"+stripANSI(line)+"|")
-	}
-	return strings.Join(shown, "\n")
-}
-
-// helpCrampedSizes are the viewports an adversarial pty sweep caught the
-// columned overlay failing at, written rows first the way a terminal reports
-// them. Every one of them showed either no binding at all or, at 8x30, one of
-// the two ways out.
-var helpCrampedSizes = []struct {
-	rows, cols int
-	// rowStarved marks a viewport too short for the grid its width could
-	// otherwise carry. There the heading and the command hint have to be gone:
-	// they are the first cells sacrificed, never the last.
-	rowStarved bool
-	// oneRow marks a viewport whose body is a single line, so the count of what
-	// was dropped has nowhere to go but onto that same line.
-	oneRow bool
-}{
-	{rows: 60, cols: 20},
-	{rows: 40, cols: 16},
-	{rows: 24, cols: 20},
-	{rows: 8, cols: 30, rowStarved: true},
-	{rows: 7, cols: 120, rowStarved: true},
-	{rows: 6, cols: 80, rowStarved: true},
-	{rows: 5, cols: 177, rowStarved: true, oneRow: true},
-	{rows: 4, cols: 120, rowStarved: true, oneRow: true},
-	{rows: 3, cols: 20, rowStarved: true, oneRow: true},
-}
-
-// TestHelpOverlayKeepsTheKeysWhenCramped is the whole point of the overlay at a
-// size that cannot hold it: cells are scarce, so the payload survives and the
-// furniture goes, never the reverse. At every one of these viewports the body
-// has at least one row, so it must carry at least one binding — the way out
-// first — and must own up to whatever it could not draw.
-func TestHelpOverlayKeepsTheKeysWhenCramped(t *testing.T) {
-	for _, size := range helpCrampedSizes {
-		t.Run(fmt.Sprintf("%dx%d", size.rows, size.cols), func(t *testing.T) {
-			width, height := bodyWidth(size.cols), bodyHeight(size.rows)
-			body := helpBody(width, height)
-			if len(body) != height {
-				t.Fatalf("helpBody(%d,%d) drew %d lines, want exactly %d",
-					width, height, len(body), height)
-			}
-			for i, line := range body {
-				if got := lipgloss.Width(line); got != width {
-					t.Errorf("line %d is %d cells wide, want exactly %d: %q",
-						i, got, width, stripANSI(line))
-				}
-			}
-			drawn, first := helpKeysDrawn(body)
-			if len(drawn) == 0 {
-				t.Fatalf("%d body rows of %d cells and not one binding drawn:\n%s",
-					height, width, helpDump(body))
-			}
-			if !drawn["q ctrl-c"] {
-				t.Errorf("the overlay drops \"q ctrl-c\" — the row a stuck reader "+
-					"opened it for — while drawing %v:\n%s", drawn, helpDump(body))
-			}
-			if len(drawn) > 1 && !drawn[":q"] {
-				t.Errorf("%d bindings drawn and \":q\" is not among them; both ways "+
-					"out outrank every other binding:\n%s", len(drawn), helpDump(body))
-			}
-			if len(drawn) < helpKeyStrings() {
-				if first >= 0 && !contains(helpKeysOnLine(body[first]), "q ctrl-c") {
-					t.Errorf("bindings are being dropped, so \"q ctrl-c\" must lead; "+
-						"the first row of bindings is %q:\n%s",
-						stripANSI(body[first]), helpDump(body))
-				}
-				if !helpOwnsUp(strings.Join(body, "\n")) {
-					t.Errorf("%d of %d key rows drawn and the overlay says nothing "+
-						"about the rest:\n%s", len(drawn), helpKeyStrings(), helpDump(body))
-				}
-			}
-			if size.oneRow && len(drawn) < helpKeyStrings() &&
-				first >= 0 && !helpOwnsUp(body[first]) {
-				t.Errorf("the body is one row, so the count of what was dropped has "+
-					"to ride that row: %q", stripANSI(body[first]))
-			}
-			if size.rowStarved && strings.Contains(stripANSI(strings.Join(body, "\n")),
-				"Keybindings") {
-				t.Errorf("a viewport too short for the keymap spends a row on the "+
-					"heading instead:\n%s", helpDump(body))
-			}
-		})
-	}
-}
-
-// contains is strings.Contains for a slice; only the tests need it.
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-// TestHelpOverlayFrameHoldsAtCrampedSizes runs the same viewports through the
-// real model: the frame stays exact, and wherever the frame has room for a body
-// row the reader can see a way out in it.
-func TestHelpOverlayFrameHoldsAtCrampedSizes(t *testing.T) {
-	for _, size := range helpCrampedSizes {
-		t.Run(fmt.Sprintf("%dx%d", size.rows, size.cols), func(t *testing.T) {
-			out := openHelpAt(t, size.cols, size.rows)
-			// The frame gives the panel what is left after the header and the
-			// footer; the first of those rows is the border, the rest are body.
-			// The frame invariant this test is named for holds at EVERY size,
-			// including those with no room for a body row. Asserting it before
-			// any bail-out is the point: an early return let the size table
-			// claim coverage it never delivered.
-			assertExactFrame(t, out, size.cols, size.rows)
-
-			visible := size.rows - headerHeight(size.rows) - footerLines - 1
-			if visible < 1 {
-				t.Skipf("no body row survives the frame at %dx%d; frame exactness asserted above", size.rows, size.cols)
-			}
-			if !strings.Contains(stripANSI(out), "q ctrl-c") {
-				t.Errorf("%d body rows on screen and no way out in them:\n%s",
-					visible, stripANSI(out))
-			}
-		})
 	}
 }

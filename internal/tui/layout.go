@@ -210,6 +210,21 @@ func bodyTitle(resource, scope string, visible, total int, filtered, more, rende
 	if rendered {
 		return fmt.Sprintf("%s(%s)", resource, scope)
 	}
+	return fmt.Sprintf("%s(%s)[%s]", resource, scope,
+		titleCount(visible, total, filtered, more))
+}
+
+// unscopedBodyTitle is the title of a view no filter narrows: Help[25]. It
+// carries the same count as bodyTitle and no parenthesis at all, since "(all)"
+// there would claim a narrowing the view does not apply.
+func unscopedBodyTitle(resource string, visible, total int, filtered, more bool) string {
+	return fmt.Sprintf("%s[%s]", resource, titleCount(visible, total, filtered, more))
+}
+
+// titleCount is the bracketed count of a body title: everything loaded, marked
+// "+" while a further page may exist, and prefixed with the visible count while
+// a filter is hiding some of it.
+func titleCount(visible, total int, filtered, more bool) string {
 	count := strconv.Itoa(total)
 	if more {
 		count += "+"
@@ -217,7 +232,7 @@ func bodyTitle(resource, scope string, visible, total int, filtered, more, rende
 	if filtered {
 		count = strconv.Itoa(visible) + "/" + count
 	}
-	return fmt.Sprintf("%s(%s)[%s]", resource, scope, count)
+	return count
 }
 
 // bodyPanel wraps the body in the titled border of spec §4.2. It returns

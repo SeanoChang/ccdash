@@ -306,12 +306,22 @@ func (t *Table) AtBottom() bool {
 	return len(t.visible) > 0 && t.selected == len(t.visible)-1
 }
 
+// bodyHeight is how many data rows the viewport holds: every line but the one
+// the column header takes. At a single line the header is dropped instead and
+// the line goes to data — a row says more there than a row of labels, and it is
+// the difference between a one-line body showing something and showing nothing.
 func (t *Table) bodyHeight() int {
-	if t.height <= 1 {
+	if t.height <= 0 {
 		return 0
 	}
-	return t.height - 1 // one line for the column header
+	if !t.showsHeader() {
+		return t.height
+	}
+	return t.height - 1
 }
+
+// showsHeader reports whether the viewport can afford the column header.
+func (t *Table) showsHeader() bool { return t.height > 1 }
 
 func (t *Table) clampSelection() {
 	if t.selected < 0 {
@@ -446,7 +456,9 @@ func (t *Table) Render() []string {
 		header = append(header, formatCell(Cell{Text: title},
 			Column{Align: column.Align, Kind: CellText}, widths[i], 0))
 	}
-	lines = append(lines, styleColumn.Render(strings.Join(header, " ")))
+	if t.showsHeader() {
+		lines = append(lines, styleColumn.Render(strings.Join(header, " ")))
+	}
 
 	body := t.bodyHeight()
 	for offset := 0; offset < body; offset++ {
