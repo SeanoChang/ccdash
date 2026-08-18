@@ -443,13 +443,14 @@ func (m Model) View() string {
 		return strings.Repeat(" ", m.width)
 	}
 	info := headerInfo{
-		DBPath:   m.dbPath,
-		Range:    m.rangeText(),
-		Tool:     string(m.scope.Tool),
-		Tokens:   formatTokens(m.totals.Tokens),
-		Cost:     fmt.Sprintf("$%.2f at API rates", m.totals.Cost),
-		Requests: fmt.Sprintf("%d", m.totals.Requests),
-		Unpriced: fmt.Sprintf("%d", m.unpriced),
+		DBPath:     m.dbPath,
+		Range:      m.rangeText(),
+		RangeShort: m.timeRange.short(),
+		Tool:       string(m.scope.Tool),
+		Tokens:     formatTokens(m.totals.Tokens),
+		Cost:       fmt.Sprintf("$%.2f at API rates", m.totals.Cost),
+		Requests:   fmt.Sprintf("%d", m.totals.Requests),
+		Unpriced:   fmt.Sprintf("%d", m.unpriced),
 	}
 	interior, height := bodyWidth(m.width), bodyHeight(m.height)
 	body := entry.table.Render()
@@ -485,13 +486,29 @@ func (m Model) bodyTitle(entry *stackEntry) string {
 		filtered, entry.more, rendered)
 }
 
+// rangeText names the window and prints its own bounds. It used to print
+// m.totals.From and .To — the extent of matching data — so a gap in the data
+// read as a narrower filter, and the actual bounds appeared nowhere. Both
+// endpoints carry the year, because a range is unreadable without it.
 func (m Model) rangeText() string {
 	text := m.timeRange.label()
-	if !m.totals.From.IsZero() {
-		text += fmt.Sprintf("  %s → %s",
-			m.totals.From.Format("2006-01-02"), m.totals.To.Format("2006-01-02"))
+	from, to := m.scope.From, m.scope.To
+	if from.IsZero() && to.IsZero() {
+		if m.totals.From.IsZero() {
+			return text
+		}
+		return fmt.Sprintf("%s  (data %s → %s)", text,
+			m.totals.From.Format("2006-01-02"),
+			m.totals.To.Format("2006-01-02"))
 	}
-	return text
+	end := to.Format("2006-01-02 15:04")
+	if !m.timeRange.calendar() {
+		// A rolling window's end is the clock itself, so the instant is marked
+		// as the moment it was resolved rather than left to read as a fixed
+		// edge the window does not have.
+		end += " (now)"
+	}
+	return fmt.Sprintf("%s  %s → %s", text, from.Format("2006-01-02 15:04"), end)
 }
 
 func (m Model) footer() string {

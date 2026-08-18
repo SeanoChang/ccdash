@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -240,5 +241,62 @@ func TestHeaderDropsLogoWhenNarrow(t *testing.T) {
 		if lipgloss.Width(line) != 50 {
 			t.Errorf("narrow header line %d width = %d, want 50", i, lipgloss.Width(line))
 		}
+	}
+}
+
+// TestRangeTextReportsFilterBoundsNotDataExtent is the regression test for a
+// header that answered a question nobody asked. With a week selected and data
+// only in its first two days, the header used to print the data's span.
+func TestRangeTextReportsFilterBoundsNotDataExtent(t *testing.T) {
+	m := newTestModel()
+	m.now = func() time.Time { return time.Date(2026, 8, 18, 15, 0, 0, 0, time.Local) }
+	next, _ := m.Update(key("w"))
+	m = next.(Model)
+
+	m.totals.From = time.Date(2026, 8, 11, 9, 0, 0, 0, time.Local)
+	m.totals.To = time.Date(2026, 8, 12, 9, 0, 0, 0, time.Local)
+
+	got := m.rangeText()
+	if !strings.Contains(got, "last 7d") {
+		t.Errorf("rangeText = %q, want it to name the window", got)
+	}
+	if !strings.Contains(got, "2026-08-11") || !strings.Contains(got, "2026-08-18") {
+		t.Errorf("rangeText = %q, want the filter's own bounds with the year", got)
+	}
+	if strings.Contains(got, "2026-08-12") {
+		t.Errorf("rangeText = %q, must not report the data's extent as the range", got)
+	}
+}
+
+// TestRangeTextForAllTimeShowsTheDataExtent: with no window there are no
+// bounds to print, so the data's span is the only honest thing to say — and
+// it is labelled as such.
+func TestRangeTextForAllTimeShowsTheDataExtent(t *testing.T) {
+	m := newTestModel()
+	m.now = func() time.Time { return time.Date(2026, 8, 18, 15, 0, 0, 0, time.Local) }
+	m.totals.From = time.Date(2026, 6, 3, 9, 0, 0, 0, time.Local)
+	m.totals.To = time.Date(2026, 8, 18, 9, 0, 0, 0, time.Local)
+
+	got := m.rangeText()
+	if !strings.Contains(got, "all") {
+		t.Errorf("rangeText = %q, want it to say all", got)
+	}
+	if !strings.Contains(got, "data 2026-06-03") {
+		t.Errorf("rangeText = %q, want the extent labelled as data", got)
+	}
+}
+
+// TestCollapsedHeaderKeepsTheShortRange: the collapsed line keeps whole fields
+// and drops the rest, so the range must arrive short enough to survive.
+func TestCollapsedHeaderKeepsTheShortRange(t *testing.T) {
+	line := collapsedHeader(headerInfo{
+		Range: "last 7d  2026-08-11 15:00 → now", RangeShort: "7d",
+		Tool: "claude", Tokens: "2.4B", Cost: "$412.80 at API rates",
+	}, 40)
+	if !strings.Contains(line, "7d") {
+		t.Errorf("collapsed header = %q, want the short range", line)
+	}
+	if strings.Contains(line, "2026-08-11") {
+		t.Errorf("collapsed header = %q, must use RangeShort at 40 cells", line)
 	}
 }

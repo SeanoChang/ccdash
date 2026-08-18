@@ -39,13 +39,14 @@ var logo = [headerLines]string{
 }
 
 type headerInfo struct {
-	DBPath   string
-	Range    string
-	Tool     string
-	Tokens   string
-	Cost     string
-	Requests string
-	Unpriced string
+	DBPath     string
+	Range      string
+	RangeShort string
+	Tool       string
+	Tokens     string
+	Cost       string
+	Requests   string
+	Unpriced   string
 }
 
 // headerHeight is the number of rows the header occupies at this terminal
@@ -167,7 +168,11 @@ func collapsedHeader(info headerInfo, width int) string {
 	// plain is measured, styled is emitted: the two have the same display width,
 	// so the field only has to fit once.
 	type field struct{ plain, styled string }
-	fields := []field{{" " + info.Range, " " + info.Range}}
+	short := info.RangeShort
+	if short == "" {
+		short = info.Range
+	}
+	fields := []field{{" " + short, " " + short}}
 	const sep = " · "
 	add := func(plain, styled string) {
 		fields = append(fields, field{sep + plain, styleDim.Render(sep) + styled})
