@@ -21,7 +21,7 @@ func seedUnpricedRollups(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	day := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	day := time.Date(2026, 8, 15, 12, 0, 0, 0, time.Local)
 	recs := []model.Record{
 		{ID: "p1", Tool: model.ToolClaude, TS: day, Model: "claude-opus-5",
 			Project: "/p/priced", Session: "s-priced", OutputTok: 1_000_000},

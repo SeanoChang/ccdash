@@ -22,8 +22,8 @@ func seedUnpriceable(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	priced := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
-	unpriced := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	priced := time.Date(2026, 8, 15, 12, 0, 0, 0, time.Local)
+	unpriced := priced.AddDate(0, 0, 1)
 	if _, err := s.UpsertRecords([]model.Record{
 		{ID: "p1", Tool: model.ToolClaude, TS: priced, Model: "claude-opus-5",
 			Project: "/p/priced", Session: "s-priced", Agent: "agent-p",

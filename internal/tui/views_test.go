@@ -18,13 +18,18 @@ func seedStore(t *testing.T) *store.Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	// Midday in the local zone, so day bucketing lands on these dates in
+	// every zone rather than only in the Americas.
+	day1 := time.Date(2023, 11, 14, 12, 0, 0, 0, time.Local)
+	day2 := day1.AddDate(0, 0, 1)
+	day3 := day1.AddDate(0, 0, 2)
 	if _, err := s.UpsertRecords([]model.Record{
-		{ID: "a1", Tool: model.ToolClaude, TS: time.Unix(1_700_000_000, 0),
+		{ID: "a1", Tool: model.ToolClaude, TS: day1,
 			Model: "claude-opus-5", Project: "/home/u/alpha", Session: "s1", OutputTok: 1000},
-		{ID: "a2", Tool: model.ToolClaude, TS: time.Unix(1_700_086_400, 0),
+		{ID: "a2", Tool: model.ToolClaude, TS: day2,
 			Model: "claude-opus-5", Project: "/home/u/alpha", Session: "s1",
 			Agent: "agent-x", Workflow: "wf-1", Depth: 1, OutputTok: 2000},
-		{ID: "b1", Tool: model.ToolCodex, TS: time.Unix(1_700_172_800, 0),
+		{ID: "b1", Tool: model.ToolCodex, TS: day3,
 			Model: unpricedFixtureModel, Project: "/home/u/beta", Session: "s2", OutputTok: 500},
 	}); err != nil {
 		t.Fatal(err)
