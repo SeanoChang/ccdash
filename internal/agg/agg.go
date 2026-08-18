@@ -85,7 +85,7 @@ func scanRows(db *sql.DB, filter Filter) ([]storedRow, error) {
 		); err != nil {
 			return nil, err
 		}
-		record.TS = time.Unix(ts, 0).UTC()
+		record.TS = time.Unix(ts, 0).Local()
 		record.Agent = agent.String
 		record.Project = project.String
 		result = append(result, storedRow{record: record})
@@ -150,10 +150,17 @@ type DayBucket struct {
 	Unpriced int
 }
 
-func dayUTC(t time.Time) time.Time {
-	year, month, day := t.UTC().Date()
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+// dayIn truncates to midnight in loc. It is split from dayLocal so tests can
+// pin a zone without depending on the machine's.
+func dayIn(t time.Time, loc *time.Location) time.Time {
+	year, month, day := t.In(loc).Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, loc)
 }
+
+// dayLocal buckets by the user's wall clock. Bucketing in UTC filed an
+// evening session in a western zone under the following day, in the Days
+// view, the Pulse axis and every Started column at once.
+func dayLocal(t time.Time) time.Time { return dayIn(t, time.Local) }
 
 func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, error) {
 	rows, err := scanRows(db, filter)
@@ -162,7 +169,7 @@ func ByDay(db *sql.DB, pricing *model.Pricing, filter Filter) ([]DayBucket, erro
 	}
 	buckets := make(map[time.Time]*DayBucket)
 	for _, row := range rows {
-		day := dayUTC(row.record.TS)
+		day := dayLocal(row.record.TS)
 		bucket := buckets[day]
 		if bucket == nil {
 			bucket = &DayBucket{Day: day}
@@ -268,7 +275,7 @@ func ByProject(db *sql.DB, pricing *model.Pricing, filter Filter) ([]ProjectBuck
 	buckets := make(map[string]*accumulation)
 	var latestDay time.Time
 	for _, row := range rows {
-		day := dayUTC(row.record.TS)
+		day := dayLocal(row.record.TS)
 		if latestDay.IsZero() || day.After(latestDay) {
 			latestDay = day
 		}
@@ -411,7 +418,7 @@ func scanDetail(db *sql.DB, filter Filter, order string, limit, offset int) ([]d
 		}
 		row.Tool = model.Tool(tool)
 		row.Record.Tool = row.Tool
-		row.Record.TS = time.Unix(ts, 0).UTC()
+		row.Record.TS = time.Unix(ts, 0).Local()
 		row.TS = row.Record.TS
 		row.Project = project.String
 		row.Record.Project = project.String

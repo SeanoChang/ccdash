@@ -208,3 +208,52 @@ func seedDetail(t *testing.T) *sql.DB {
 	}
 	return s.DB()
 }
+
+// TestDayInBucketsByTheGivenZone pins the boundary that matters: an evening
+// session in a western zone belongs to the day the user experienced, not to
+// the next UTC day. dayIn takes a location so this is testable without
+// depending on the machine's zone.
+func TestDayInBucketsByTheGivenZone(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("load America/New_York: %v", err)
+	}
+	// 2026-08-18 01:30 UTC is 2026-08-17 21:30 in New York.
+	instant := time.Date(2026, 8, 18, 1, 30, 0, 0, time.UTC)
+
+	if got := dayIn(instant, loc).Format("2006-01-02"); got != "2026-08-17" {
+		t.Errorf("dayIn(New York) = %s, want 2026-08-17", got)
+	}
+	if got := dayIn(instant, time.UTC).Format("2006-01-02"); got != "2026-08-18" {
+		t.Errorf("dayIn(UTC) = %s, want 2026-08-18", got)
+	}
+}
+
+// TestScannedTimestampsCarryTheLocalZone guards the two normalization points.
+// Every display site formats from these, so a UTC location here silently
+// relabels every timestamp in the application.
+func TestScannedTimestampsCarryTheLocalZone(t *testing.T) {
+	db := seedUnpricedRollups(t)
+
+	rows, err := scanRows(db, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("no rows scanned")
+	}
+	if got := rows[0].record.TS.Location(); got != time.Local {
+		t.Errorf("scanRows location = %v, want %v", got, time.Local)
+	}
+
+	detail, err := scanDetail(db, Filter{}, "ts ASC", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail) == 0 {
+		t.Fatal("no detail rows scanned")
+	}
+	if got := detail[0].TS.Location(); got != time.Local {
+		t.Errorf("scanDetail location = %v, want %v", got, time.Local)
+	}
+}
